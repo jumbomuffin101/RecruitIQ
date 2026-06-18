@@ -4,6 +4,7 @@ import { CandidateCard } from "@/components/CandidateCard";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { ResumeUploadField } from "@/components/ResumeUploadField";
 import { getCandidates } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export default async function CandidatesPage() {
                 <option value="REJECTED">Rejected</option>
               </select>
               <textarea name="experienceSummary" required placeholder="Experience summary" rows={3} className="focus-ring rounded-lg border border-slate-200 px-3 py-2" />
-              <textarea name="resumeText" required placeholder="Resume text" rows={6} className="focus-ring rounded-lg border border-slate-200 px-3 py-2" />
+              <ResumeUploadField />
               <textarea name="notes" placeholder="Notes" rows={3} className="focus-ring rounded-lg border border-slate-200 px-3 py-2" />
               <button className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800">
                 Add candidate

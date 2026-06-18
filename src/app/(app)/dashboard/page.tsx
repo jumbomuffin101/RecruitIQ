@@ -25,10 +25,10 @@ export default async function DashboardPage() {
           description="Track open roles, candidate volume, interview activity, and fit scores across your lean hiring team."
         />
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Open jobs" value={data.openJobs} detail="Active roles accepting candidates" icon={BriefcaseBusiness} />
-          <StatCard label="Total candidates" value={data.totalCandidates} detail="Across every pipeline stage" icon={Users} />
-          <StatCard label="Interviews scheduled" value={data.interviewsScheduled} detail="Candidates currently in interview" icon={CalendarCheck} />
-          <StatCard label="Average fit score" value={data.averageFitScore || "Pending"} detail="From generated AI analysis" icon={BarChart3} />
+          <StatCard label="Open jobs" value={data.openJobs} detail="Active roles accepting candidates" icon={BriefcaseBusiness} accent="emerald" />
+          <StatCard label="Total candidates" value={data.totalCandidates} detail="Across every pipeline stage" icon={Users} accent="blue" />
+          <StatCard label="Interviews scheduled" value={data.interviewsScheduled} detail="Candidates currently in interview" icon={CalendarCheck} accent="violet" />
+          <StatCard label="Average fit score" value={data.averageFitScore || "Pending"} detail="From generated AI analysis" icon={BarChart3} accent="amber" />
         </section>
 
         <section className="mt-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">

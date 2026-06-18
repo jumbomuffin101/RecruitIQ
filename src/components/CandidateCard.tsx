@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Mail, MapPin } from "lucide-react";
+import { CandidateAvatar } from "@/components/CandidateAvatar";
+import { FitScoreBar } from "@/components/FitScoreBar";
 import { StatusBadge } from "@/components/StatusBadge";
 
 type CandidateCardProps = {
@@ -26,9 +28,12 @@ export function CandidateCard({ candidate }: CandidateCardProps) {
       className="surface block rounded-lg p-5 transition hover:-translate-y-0.5 hover:shadow-xl"
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-950">{candidate.name}</h3>
-          <p className="mt-1 text-sm text-slate-500">{candidate.roleAppliedFor}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <CandidateAvatar name={candidate.name} />
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-semibold text-slate-950">{candidate.name}</h3>
+            <p className="mt-1 truncate text-sm text-slate-500">{candidate.roleAppliedFor}</p>
+          </div>
         </div>
         <StatusBadge status={candidate.status} />
       </div>
@@ -51,9 +56,8 @@ export function CandidateCard({ candidate }: CandidateCardProps) {
           </span>
         ))}
       </div>
-      <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
-        <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Fit score</span>
-        <span className="text-lg font-semibold text-slate-950">{score ?? "Pending"}</span>
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <FitScoreBar score={score} />
       </div>
     </Link>
   );

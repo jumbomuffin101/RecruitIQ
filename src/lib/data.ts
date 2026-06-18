@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
+import { analyzeCandidateForJob } from "@/lib/ai";
 
 export async function getDemoOrganization() {
   const prisma = getPrisma();
@@ -120,5 +121,83 @@ export async function getAnalyticsData() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([skill, count]) => ({ skill, count })),
+  };
+}
+
+function recommendedNextAction(score: number, status: string) {
+  if (status === "REJECTED") {
+    return "Keep archived unless a better-fit role opens.";
+  }
+
+  if (score >= 85) {
+    return "Prioritize for founder or hiring-manager interview.";
+  }
+
+  if (score >= 72) {
+    return "Schedule a structured skills interview.";
+  }
+
+  if (score >= 58) {
+    return "Run a focused screen on the listed gaps.";
+  }
+
+  return "Hold for now or redirect to a stronger matching role.";
+}
+
+export async function getCompareData(jobId?: string) {
+  const jobs = await getJobs();
+  const selectedJob = jobs.find((job) => job.id === jobId) ?? jobs.find((job) => job.status === "OPEN") ?? jobs[0];
+
+  if (!selectedJob) {
+    return {
+      jobs,
+      selectedJob: null,
+      rankedCandidates: [],
+    };
+  }
+
+  const fullCandidates = await getPrisma().candidate.findMany({
+    where: { organizationId: selectedJob.organizationId },
+    include: {
+      applications: true,
+      resumeAnalyses: { orderBy: { createdAt: "desc" } },
+    },
+  });
+
+  const rankedCandidates = fullCandidates
+    .map((candidate) => {
+      const savedAnalysis = candidate.resumeAnalyses.find((analysis) => analysis.jobId === selectedJob.id);
+      const savedApplication = candidate.applications.find((application) => application.jobId === selectedJob.id);
+      const analysis = savedAnalysis
+        ? {
+            fitScore: savedAnalysis.fitScore,
+            summary: savedAnalysis.summary,
+            strengths: savedAnalysis.strengths,
+            gaps: savedAnalysis.gaps,
+            recommendedStage: savedAnalysis.recommendedStage,
+            interviewQuestions: [],
+          }
+        : analyzeCandidateForJob(candidate, selectedJob);
+      const fitScore = savedApplication?.fitScore ?? analysis.fitScore;
+
+      return {
+        id: candidate.id,
+        name: candidate.name,
+        roleAppliedFor: candidate.roleAppliedFor,
+        status: candidate.status,
+        skills: candidate.skills,
+        fitScore,
+        strengths: analysis.strengths,
+        gaps: analysis.gaps,
+        recommendedStage: analysis.recommendedStage,
+        recommendedNextAction: recommendedNextAction(fitScore, candidate.status),
+      };
+    })
+    .sort((a, b) => b.fitScore - a.fitScore);
+
+  return {
+    jobs,
+    selectedJob,
+    rankedCandidates,
   };
 }

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BrainCircuit, CheckCircle2, CircleAlert, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowLeft, BrainCircuit, CheckCircle2, CircleAlert, Mail, MapPin, Phone, Sparkles } from "lucide-react";
 import { generateCandidateAnalysis, updateCandidateStatus } from "@/app/actions";
+import { CandidateAvatar } from "@/components/CandidateAvatar";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
+import { FitScoreBar } from "@/components/FitScoreBar";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatEnum } from "@/lib/utils";
@@ -36,12 +38,31 @@ export default async function CandidateDetailPage({
           <ArrowLeft className="h-4 w-4" />
           Back to candidates
         </Link>
-        <PageHeader
-          eyebrow="Candidate profile"
-          title={candidate.name}
-          description={`${candidate.roleAppliedFor}${application?.job ? ` for ${application.job.title}` : ""}`}
-          action={<StatusBadge status={candidate.status} />}
-        />
+        <div className="surface mb-8 rounded-lg p-5">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <CandidateAvatar name={candidate.name} size="lg" />
+              <div>
+                <PageHeader
+                  eyebrow="Candidate profile"
+                  title={candidate.name}
+                  description={`${candidate.roleAppliedFor}${application?.job ? ` for ${application.job.title}` : ""}`}
+                  action={null}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <StatusBadge status={candidate.status} />
+              <form action={generateCandidateAnalysis}>
+                <input type="hidden" name="candidateId" value={candidate.id} />
+                <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-900">
+                  <Sparkles className="h-4 w-4" />
+                  {analysis ? "Regenerate AI Analysis" : "Generate AI Analysis"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
 
         <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className="space-y-6">
@@ -99,24 +120,25 @@ export default async function CandidateDetailPage({
             <div className="surface rounded-lg p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-950">AI fit analysis</h2>
-                  <p className="mt-1 text-sm text-slate-500">Deterministic scoring based on skills, resume text, and job requirements.</p>
+                  <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+                    <BrainCircuit className="h-5 w-5 text-blue-700" />
+                    AI recruiting copilot
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">Uses OpenRouter when configured, with deterministic scoring as a reliable fallback.</p>
                 </div>
-                <form action={generateCandidateAnalysis}>
-                  <input type="hidden" name="candidateId" value={candidate.id} />
-                  <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-900">
-                    <BrainCircuit className="h-4 w-4" />
-                    {analysis ? "Regenerate" : "Generate"}
-                  </button>
-                </form>
               </div>
               {analysis ? (
                 <div className="mt-6">
-                  <div className="flex items-end gap-3">
-                    <span className="text-6xl font-semibold tracking-tight text-slate-950">{analysis.fitScore}</span>
-                    <span className="pb-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Fit score</span>
+                  <div className="rounded-lg bg-slate-950 p-5 text-white">
+                    <div className="flex items-end gap-3">
+                      <span className="text-6xl font-semibold tracking-tight">{analysis.fitScore}</span>
+                      <span className="pb-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">Fit score</span>
+                    </div>
+                    <div className="mt-5">
+                      <FitScoreBar score={analysis.fitScore} size="lg" inverted />
+                    </div>
+                    <p className="mt-4 text-sm leading-6 text-slate-300">{analysis.summary}</p>
                   </div>
-                  <p className="mt-4 text-sm leading-6 text-slate-600">{analysis.summary}</p>
                   <div className="mt-6 grid gap-4 md:grid-cols-2">
                     <div className="rounded-lg bg-emerald-50 p-4">
                       <h3 className="flex items-center gap-2 font-semibold text-emerald-900">

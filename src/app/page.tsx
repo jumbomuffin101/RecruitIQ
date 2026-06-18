@@ -5,6 +5,8 @@ import {
   BrainCircuit,
   BriefcaseBusiness,
   CheckCircle2,
+  FileText,
+  Scale,
   Users,
   Workflow,
 } from "lucide-react";
@@ -24,6 +26,21 @@ const features = [
     title: "Interview prep",
     description: "Generate targeted questions from resume text, skills, and role requirements.",
     icon: Users,
+  },
+  {
+    title: "Resume upload",
+    description: "Parse .txt resumes into candidate profiles without adding paid storage.",
+    icon: FileText,
+  },
+  {
+    title: "Candidate compare",
+    description: "Rank every applicant against a job with explainable next actions.",
+    icon: Scale,
+  },
+  {
+    title: "AI fallback",
+    description: "Use OpenRouter when configured and deterministic scoring when keys are absent.",
+    icon: CheckCircle2,
   },
 ];
 
@@ -45,7 +62,7 @@ export default function LandingPage() {
         </Link>
       </header>
 
-      <section className="border-y border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_70%)]">
+      <section className="border-y border-slate-200 bg-[radial-gradient(circle_at_top_left,#dbeafe_0,#ffffff_32%,#f8fafc_100%)]">
         <div className="mx-auto grid max-w-7xl gap-10 px-6 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
             <p className="mb-4 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
@@ -67,10 +84,10 @@ export default function LandingPage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/jobs"
+                href="/compare"
                 className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
               >
-                Create a job
+                Compare candidates
               </Link>
             </div>
           </div>
@@ -109,7 +126,7 @@ export default function LandingPage() {
             RecruitIQ keeps the MVP tight: jobs, candidates, pipeline stages, scoring, notes, and interview kits.
           </p>
         </div>
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
+        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {features.map((feature) => (
             <article key={feature.title} className="surface rounded-lg p-6">
               <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
@@ -137,6 +154,9 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+      <footer className="border-t border-slate-200 bg-white px-6 py-6 text-center text-sm text-slate-500">
+        Powered by Vercel plus AWS Aurora PostgreSQL-compatible architecture.
+      </footer>
     </main>
   );
 }

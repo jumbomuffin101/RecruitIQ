@@ -22,6 +22,10 @@ export type CandidateAnalysisResult = {
   interviewQuestions: string[];
 };
 
+type AnalysisWithSource = CandidateAnalysisResult & {
+  source: "openrouter" | "mock";
+};
+
 const stopWords = new Set([
   "and",
   "the",
@@ -165,4 +169,136 @@ export function analyzeCandidateForJob(
       `Which part of this role best matches your strongest recent experience, and why?`,
     ],
   };
+}
+
+function normalizeAnalysis(value: CandidateAnalysisResult): CandidateAnalysisResult {
+  const validStages = new Set(["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"]);
+
+  return {
+    fitScore: Math.round(clamp(Number(value.fitScore) || 0, 0, 100)),
+    summary: String(value.summary || "Candidate analysis generated.").slice(0, 900),
+    strengths: Array.isArray(value.strengths) && value.strengths.length
+      ? value.strengths.map(String).slice(0, 5)
+      : ["Profile has enough information for structured review."],
+    gaps: Array.isArray(value.gaps) && value.gaps.length
+      ? value.gaps.map(String).slice(0, 5)
+      : ["No major gaps were identified from the provided resume text."],
+    recommendedStage: validStages.has(value.recommendedStage) ? value.recommendedStage : "SCREENED",
+    interviewQuestions: Array.isArray(value.interviewQuestions) && value.interviewQuestions.length
+      ? value.interviewQuestions.map(String).slice(0, 6)
+      : ["What experience best prepares you for this role?"],
+  };
+}
+
+async function analyzeWithOpenRouter(
+  candidate: CandidateLike,
+  job: JobLike,
+): Promise<CandidateAnalysisResult | null> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+
+  if (!apiKey) {
+    return null;
+  }
+
+  const baseUrl = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+  const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-OpenRouter-Title": "RecruitIQ",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        max_tokens: 900,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are RecruitIQ, a careful AI recruiting copilot. Return only structured JSON that matches the schema. Do not invent credentials. Prefer concrete evidence from the resume and job requirements.",
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              candidate,
+              job,
+              task:
+                "Evaluate this candidate for this job. Score fit from 0-100, summarize evidence, list strengths and gaps, recommend one stage, and generate tailored interview questions.",
+            }),
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "candidate_analysis",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                fitScore: { type: "number", minimum: 0, maximum: 100 },
+                summary: { type: "string" },
+                strengths: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 },
+                gaps: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 },
+                recommendedStage: {
+                  type: "string",
+                  enum: ["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"],
+                },
+                interviewQuestions: {
+                  type: "array",
+                  items: { type: "string" },
+                  minItems: 3,
+                  maxItems: 6,
+                },
+              },
+              required: [
+                "fitScore",
+                "summary",
+                "strengths",
+                "gaps",
+                "recommendedStage",
+                "interviewQuestions",
+              ],
+            },
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json() as {
+      choices?: { message?: { content?: string | CandidateAnalysisResult } }[];
+    };
+    const content = payload.choices?.[0]?.message?.content;
+    const parsed = typeof content === "string" ? JSON.parse(content) : content;
+
+    if (!parsed) {
+      return null;
+    }
+
+    return normalizeAnalysis(parsed as CandidateAnalysisResult);
+  } catch {
+    return null;
+  }
+}
+
+export async function analyzeCandidateForJobWithFallback(
+  candidate: CandidateLike,
+  job: JobLike,
+): Promise<AnalysisWithSource> {
+  const realAnalysis = await analyzeWithOpenRouter(candidate, job);
+
+  if (realAnalysis) {
+    return { ...realAnalysis, source: "openrouter" };
+  }
+
+  return { ...analyzeCandidateForJob(candidate, job), source: "mock" };
 }

@@ -8,7 +8,7 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { analyzeCandidateForJob } from "@/lib/ai";
+import { analyzeCandidateForJobWithFallback } from "@/lib/ai";
 import { getDemoOrganization } from "@/lib/data";
 import { getPrisma } from "@/lib/prisma";
 
@@ -169,8 +169,8 @@ export async function generateCandidateAnalysis(formData: FormData) {
     throw new Error("Create a job before generating candidate analysis.");
   }
 
-  // TODO: Replace this deterministic scorer with OpenAI or Amazon Bedrock for production AI analysis.
-  const analysis = analyzeCandidateForJob(candidate, job);
+  // TODO: Extend this provider switch to Amazon Bedrock when deploying against Aurora in AWS.
+  const analysis = await analyzeCandidateForJobWithFallback(candidate, job);
 
   await prisma.$transaction([
     prisma.resumeAnalysis.create({
@@ -215,7 +215,7 @@ export async function generateCandidateAnalysis(formData: FormData) {
         organizationId: org.id,
         type: ActivityType.ANALYSIS_GENERATED,
         message: `AI analysis generated for ${candidate.name}.`,
-        metadata: { candidateId: candidate.id, jobId: job.id, fitScore: analysis.fitScore },
+        metadata: { candidateId: candidate.id, jobId: job.id, fitScore: analysis.fitScore, source: analysis.source },
       },
     }),
   ]);
@@ -225,4 +225,5 @@ export async function generateCandidateAnalysis(formData: FormData) {
   revalidatePath("/pipeline");
   revalidatePath("/analytics");
   revalidatePath("/dashboard");
+  revalidatePath("/compare");
 }
