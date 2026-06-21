@@ -1,4 +1,5 @@
-import { BarChart3, BriefcaseBusiness, CalendarCheck, Users, Workflow } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, BriefcaseBusiness, CalendarCheck, Scale, Users, Workflow } from "lucide-react";
 import { CandidateCard } from "@/components/CandidateCard";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { PageHeader } from "@/components/PageHeader";
@@ -23,7 +24,18 @@ export default async function DashboardPage() {
           eyebrow="Command center"
           title="Hiring dashboard"
           description="Track open roles, candidate volume, interview activity, and fit scores across your lean hiring team."
+          action={
+            <Link href="/compare" className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
+              <Scale className="h-4 w-4" />
+              Compare candidates
+            </Link>
+          }
         />
+        {data.candidates.length > 0 ? (
+          <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
+            Seeded demo data is loaded: {data.jobs.length} jobs and {data.candidates.length} candidates are ready for the judge walkthrough.
+          </div>
+        ) : null}
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Open jobs" value={data.openJobs} detail="Active roles accepting candidates" icon={BriefcaseBusiness} accent="emerald" />
           <StatCard label="Total candidates" value={data.totalCandidates} detail="Across every pipeline stage" icon={Users} accent="blue" />

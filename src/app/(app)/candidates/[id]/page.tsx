@@ -34,10 +34,20 @@ export default async function CandidateDetailPage({
 
     return (
       <>
-        <Link href="/candidates" className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
-          <ArrowLeft className="h-4 w-4" />
-          Back to candidates
-        </Link>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <Link href="/candidates" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
+            <ArrowLeft className="h-4 w-4" />
+            Back to candidates
+          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/pipeline" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              View pipeline
+            </Link>
+            <Link href="/compare" className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white">
+              Compare candidates
+            </Link>
+          </div>
+        </div>
         <div className="surface mb-8 rounded-lg p-5">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">

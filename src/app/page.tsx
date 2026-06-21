@@ -54,20 +54,30 @@ export default function LandingPage() {
           </span>
           RecruitIQ
         </Link>
-        <Link
-          href="/dashboard"
-          className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          Open dashboard
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/demo" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
+            Demo
+          </Link>
+          <Link
+            href="/dashboard"
+            className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          >
+            Open dashboard
+          </Link>
+        </div>
       </header>
 
       <section className="border-y border-slate-200 bg-[radial-gradient(circle_at_top_left,#dbeafe_0,#ffffff_32%,#f8fafc_100%)]">
         <div className="mx-auto grid max-w-7xl gap-10 px-6 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
-            <p className="mb-4 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
-              AI-powered ATS for lean teams
-            </p>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <p className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
+                AI-powered ATS for lean teams
+              </p>
+              <p className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-800 ring-1 ring-blue-200">
+                Built for H0 Hackathon
+              </p>
+            </div>
             <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-slate-950 md:text-7xl">
               Hire faster with a smarter, smaller recruiting stack.
             </h1>
@@ -77,10 +87,10 @@ export default function LandingPage() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/dashboard"
+                href="/demo"
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-900"
               >
-                View demo dashboard
+                Start guided demo
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
@@ -136,6 +146,30 @@ export default function LandingPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">{feature.description}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="border-t border-slate-200 bg-slate-50">
+        <div className="mx-auto max-w-7xl px-6 py-16">
+          <div className="max-w-3xl">
+            <h2 className="text-3xl font-semibold tracking-tight">Built as a monetizable B2B recruiting tool.</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              RecruitIQ turns scattered resume review into a repeatable hiring operating system for lean teams that need structure without enterprise ATS overhead.
+            </p>
+          </div>
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Problem", "Small teams hire from inboxes, spreadsheets, and inconsistent interview notes."],
+              ["Solution", "One workflow for jobs, resumes, AI analysis, comparison, pipeline, and analytics."],
+              ["Why pay", "Teams save screening time, standardize interviews, and avoid losing strong candidates."],
+              ["Why PostgreSQL", "Recruiting data is relational, auditable, queryable, and a strong fit for Aurora PostgreSQL."],
+            ].map(([title, copy]) => (
+              <article key={title} className="surface rounded-lg p-5">
+                <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 

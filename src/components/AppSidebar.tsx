@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   BarChart3,
   BriefcaseBusiness,
+  Map,
   LayoutDashboard,
   Scale,
   Sparkles,
@@ -11,11 +12,13 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/demo", label: "Demo", icon: Map },
   { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
   { href: "/candidates", label: "Candidates", icon: Users },
   { href: "/pipeline", label: "Pipeline", icon: Workflow },
   { href: "/compare", label: "Compare", icon: Scale },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/architecture", label: "Architecture", icon: Sparkles },
 ];
 
 export function AppSidebar() {

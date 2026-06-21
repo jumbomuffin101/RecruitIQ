@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Users } from "lucide-react";
 import { createCandidate } from "@/app/actions";
 import { CandidateCard } from "@/components/CandidateCard";
@@ -58,7 +59,16 @@ export default async function CandidatesPage() {
                 ))}
               </div>
             ) : (
-              <EmptyState icon={Users} title="No candidates yet" description="Add a candidate to start analysis and pipeline tracking." />
+              <EmptyState
+                icon={Users}
+                title="No candidates yet"
+                description="Add a candidate with resume text to unlock scoring, interview prep, comparison, and pipeline tracking."
+                action={
+                  <Link href="/jobs" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
+                    Create a job first
+                  </Link>
+                }
+              />
             )}
           </div>
         </section>
