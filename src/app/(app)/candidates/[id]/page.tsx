@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BrainCircuit, CheckCircle2, CircleAlert, FileSearch, ListChecks, Mail, MapPin, MessageSquareText, Phone, Target, UsersRound, Wrench } from "lucide-react";
+import { ArrowLeft, BrainCircuit, BriefcaseBusiness, CheckCircle2, CircleAlert, ExternalLink, FileSearch, FolderKanban, GraduationCap, ListChecks, Mail, MapPin, MessageSquareText, Phone, Target, UsersRound, Wrench } from "lucide-react";
 import { generateCandidateAnalysis, updateCandidateStatus } from "@/app/actions";
 import { CandidateAvatar } from "@/components/CandidateAvatar";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
@@ -103,7 +103,15 @@ export default async function CandidateDetailPage({
                     {candidate.location}
                   </p>
                 ) : null}
+                {candidate.linkedinUrl ? <a href={candidate.linkedinUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-700 hover:underline"><ExternalLink className="h-4 w-4" />LinkedIn profile</a> : null}
+                {candidate.githubUrl ? <a href={candidate.githubUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-700 hover:underline"><ExternalLink className="h-4 w-4" />GitHub profile</a> : null}
               </div>
+              {(candidate.currentTitle || candidate.currentCompany || candidate.yearsExperience !== null) ? (
+                <div className="mt-5 rounded-lg bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-950">{candidate.currentTitle || "Professional experience"}</p>
+                  <p className="mt-1 text-sm text-slate-600">{[candidate.currentCompany, candidate.yearsExperience !== null ? `${candidate.yearsExperience} years estimated experience` : ""].filter(Boolean).join(" | ")}</p>
+                </div>
+              ) : null}
               <div className="mt-5 flex flex-wrap gap-2">
                 {candidate.skills.map((skill) => (
                   <span key={skill} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
@@ -215,11 +223,26 @@ export default async function CandidateDetailPage({
             </div>
 
             <div className="surface rounded-lg p-5">
-              <h2 className="text-lg font-semibold text-slate-950">Resume summary</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{candidate.experienceSummary}</p>
-              <div className="mt-5 max-h-72 overflow-auto rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                {candidate.resumeText}
+              <h2 className="text-lg font-semibold text-slate-950">Resume profile</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-700">{candidate.resumeSummary || candidate.experienceSummary}</p>
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg bg-blue-50 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-blue-950"><BriefcaseBusiness className="h-4 w-4" />Experience</h3>
+                  <p className="mt-2 text-sm leading-6 text-blue-900">{candidate.experienceSummary || "No experience summary available."}</p>
+                </div>
+                <div className="rounded-lg bg-emerald-50 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-emerald-950"><GraduationCap className="h-4 w-4" />Education</h3>
+                  <p className="mt-2 text-sm leading-6 text-emerald-900">{candidate.educationSummary || "No education details provided."}</p>
+                </div>
+                <div className="rounded-lg bg-violet-50 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-violet-950"><FolderKanban className="h-4 w-4" />Projects</h3>
+                  <p className="mt-2 text-sm leading-6 text-violet-900">{candidate.projectsSummary || "No project highlights provided."}</p>
+                </div>
               </div>
+              <details className="mt-5 rounded-lg border border-slate-200 bg-slate-50">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">View raw resume text</summary>
+                <div className="max-h-80 overflow-auto border-t border-slate-200 px-4 py-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{candidate.resumeText}</div>
+              </details>
             </div>
 
             <div className="surface rounded-lg p-5">

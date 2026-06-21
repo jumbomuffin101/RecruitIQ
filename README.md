@@ -23,8 +23,10 @@ Small recruiting teams often run hiring from spreadsheets, inboxes, and inconsis
 ## Features
 
 - Job creation and active hiring portfolio
-- PDF and TXT resume parsing without permanent file storage
-- Manual resume text fallback when extraction is unavailable
+- Two-step PDF/TXT resume intake with editable structured field extraction
+- Deterministic extraction for contact details, links, education, recent role, skills, experience, projects, and concise summary
+- Optional OpenRouter enhancement with deterministic fallback
+- Manual resume text and manual profile entry when extraction is unavailable
 - Candidate profiles with skills, notes, stage, and resume evidence
 - Recruiter Copilot with fit score, executive summary, role match, strengths, risks, next step, and interview kit
 - Optional OpenRouter analysis with deterministic fallback
@@ -72,6 +74,8 @@ The Prisma schema uses PostgreSQL-native features and remains portable to other 
 - `prisma/seed.ts`: Northstar Labs sample workspace
 - `src/app/actions.ts`: trusted server mutations
 - `src/app/api/resume/parse/route.ts`: private PDF/TXT extraction route
+- `src/lib/resume-extract.ts`: deterministic and optional OpenRouter structured extraction
+- `src/components/CandidateIntakeForm.tsx`: two-step editable resume intake
 - `src/lib/ai.ts`: OpenRouter integration and deterministic fallback
 - `src/app/(app)/dashboard/page.tsx`: metrics and Action Center
 - `src/app/(app)/compare/page.tsx`: job-specific candidate prioritization
@@ -125,12 +129,13 @@ docker compose up -d postgres
 1. Open `/quick-start` for the guided product flow.
 2. Review the dashboard metrics and prioritized Action Center.
 3. Create a job or inspect the existing Northstar Labs roles.
-4. Upload a PDF or TXT resume from `/candidates` and review the extracted text.
-5. Open a candidate and generate Recruiter Copilot analysis.
-6. Show the fit score, evidence, risks, suggested next step, and interview kit.
-7. Use `/compare` to rank applicants for a selected job.
-8. Move a candidate in `/pipeline` and finish with `/analytics`.
-9. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
+4. Upload a PDF or TXT resume from `/candidates`, extract structured details, and edit the profile before saving.
+5. Open the saved candidate and review the concise summary, education, experience, projects, and raw resume disclosure.
+6. Generate Recruiter Copilot analysis.
+7. Show the fit score, evidence, risks, suggested next step, and interview kit.
+8. Use `/compare` to rank applicants for a selected job.
+9. Move a candidate in `/pipeline` and finish with `/analytics`.
+10. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
 
 ## Challenges
 

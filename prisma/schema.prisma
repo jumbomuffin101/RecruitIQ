@@ -84,6 +84,14 @@ model Candidate {
   email             String
   phone             String?
   location          String?
+  linkedinUrl       String?
+  githubUrl         String?
+  educationSummary String?
+  currentTitle      String?
+  currentCompany    String?
+  projectsSummary   String?
+  yearsExperience   Float?
+  resumeSummary     String?
   roleAppliedFor    String
   resumeText        String
   skills            String[]

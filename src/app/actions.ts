@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { analyzeCandidateForJobWithFallback } from "@/lib/ai";
 import { getWorkspaceOrganization } from "@/lib/data";
 import { getPrisma } from "@/lib/prisma";
+import { extractResumeWithFallback } from "@/lib/resume-extract";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -30,6 +31,26 @@ function parseSkills(value: string) {
     .split(",")
     .map((skill) => skill.trim())
     .filter(Boolean);
+}
+
+function optionalFloat(formData: FormData, key: string) {
+  const rawValue = String(formData.get(key) ?? "").trim();
+  if (!rawValue) return null;
+  const value = Number(rawValue);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export async function parseResumeAction(formData: FormData) {
+  const resumeText = requiredString(formData, "resumeText");
+  if (resumeText.length > 100_000) {
+    return { success: false as const, error: "Resume text is too long. Please keep it under 100,000 characters." };
+  }
+  try {
+    const data = await extractResumeWithFallback(resumeText);
+    return { success: true as const, data };
+  } catch {
+    return { success: false as const, error: "We could not extract candidate details. You can continue with manual entry." };
+  }
 }
 
 export async function createJob(formData: FormData) {
@@ -66,6 +87,9 @@ export async function createCandidate(formData: FormData) {
   const prisma = getPrisma();
   const org = await getWorkspaceOrganization();
   const roleAppliedFor = requiredString(formData, "roleAppliedFor");
+  const experienceSummary = requiredString(formData, "experienceSummary");
+  const resumeSummary = optionalString(formData, "resumeSummary") ?? experienceSummary;
+  const resumeText = optionalString(formData, "resumeText") ?? resumeSummary;
   const candidate = await prisma.candidate.create({
     data: {
       organizationId: org.id,
@@ -73,10 +97,18 @@ export async function createCandidate(formData: FormData) {
       email: requiredString(formData, "email"),
       phone: optionalString(formData, "phone"),
       location: optionalString(formData, "location"),
+      linkedinUrl: optionalString(formData, "linkedinUrl"),
+      githubUrl: optionalString(formData, "githubUrl"),
+      educationSummary: optionalString(formData, "educationSummary"),
+      currentTitle: optionalString(formData, "currentTitle"),
+      currentCompany: optionalString(formData, "currentCompany"),
+      projectsSummary: optionalString(formData, "projectsSummary"),
+      yearsExperience: optionalFloat(formData, "yearsExperience"),
+      resumeSummary,
       roleAppliedFor,
-      resumeText: requiredString(formData, "resumeText"),
+      resumeText,
       skills: parseSkills(requiredString(formData, "skills")),
-      experienceSummary: requiredString(formData, "experienceSummary"),
+      experienceSummary,
       status: String(formData.get("status") ?? "APPLIED") as CandidateStatus,
       notes: optionalString(formData, "notes"),
     },

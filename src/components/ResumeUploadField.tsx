@@ -4,9 +4,8 @@ import { useCallback, useRef, useState } from "react";
 import { FileCheck2, FileText, LoaderCircle, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function ResumeUploadField() {
+export function ResumeUploadField({ value, onTextChange }: { value: string; onTextChange: (value: string) => void }) {
   const [fileName, setFileName] = useState("");
-  const [resumeText, setResumeText] = useState("");
   const [error, setError] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,13 +33,13 @@ export function ResumeUploadField() {
         return;
       }
 
-      setResumeText(result.text);
+      onTextChange(result.text);
     } catch {
       setError("We could not read this resume. Please paste the text manually below.");
     } finally {
       setIsParsing(false);
     }
-  }, []);
+  }, [onTextChange]);
 
   return (
     <div className="space-y-3">
@@ -93,9 +92,9 @@ export function ResumeUploadField() {
 
       {fileName ? (
         <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-          {resumeText && !error ? <FileCheck2 className="h-4 w-4 text-emerald-700" /> : <FileText className="h-4 w-4 text-blue-700" />}
+          {value && !error ? <FileCheck2 className="h-4 w-4 text-emerald-700" /> : <FileText className="h-4 w-4 text-blue-700" />}
           <span className="font-medium">{fileName}</span>
-          {resumeText && !error ? <span className="ml-auto text-xs font-semibold text-emerald-700">Text extracted</span> : null}
+          {value && !error ? <span className="ml-auto text-xs font-semibold text-emerald-700">Text extracted</span> : null}
         </div>
       ) : null}
 
@@ -104,8 +103,8 @@ export function ResumeUploadField() {
       <textarea
         name="resumeText"
         required
-        value={resumeText}
-        onChange={(event) => setResumeText(event.target.value)}
+        value={value}
+        onChange={(event) => onTextChange(event.target.value)}
         placeholder="Extracted resume preview. You can edit this text or paste it manually."
         rows={7}
         className="focus-ring w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-6"

@@ -152,10 +152,31 @@ async function main() {
     },
   ];
 
-  for (const input of candidateInputs) {
+  const currentTitles = ["Senior Product Engineer", "Full-Stack Engineer", "Backend Engineer", "Web Producer", "Senior Customer Success Manager", "Customer Success Manager", "Customer Support Lead", "Growth Operations Manager", "Lifecycle Marketing Specialist", "Marketing Coordinator", "Senior Product Designer", "Visual Designer"];
+  const currentCompanies = ["Orbit Systems", "Atlas Cloud", "Keystone Financial", "Independent", "Beacon SaaS", "Relay Health", "Copper Support", "Northwind Growth", "Juniper Commerce", "Cedar Events", "Canvas Works", "Studio Meridian"];
+  const yearsExperience = [7, 4, 5, 2, 8, 4, 3, 5, 3, 1.5, 6, 3];
+  const educationSummaries = [
+    "B.S. Computer Science, University of California, Berkeley.", "B.S. Software Engineering, University of Washington.",
+    "B.S. Computer Engineering, Rutgers University.", "B.A. Digital Media, DePaul University.",
+    "B.A. Business Administration, New York University.", "B.A. Communications, Boston University.",
+    "B.A. Psychology, Georgia State University.", "B.S. Information Systems, University of Texas at Austin.",
+    "B.B.A. Marketing, Texas State University.", "B.A. Marketing, Northeastern University.",
+    "B.F.A. Interaction Design, Savannah College of Art and Design.", "B.F.A. Graphic Design, California College of the Arts.",
+  ];
+
+  for (const [index, input] of candidateInputs.entries()) {
+    const profileSlug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const candidate = await prisma.candidate.create({
       data: {
         organizationId: org.id, name: input.name, email: input.email, phone: input.phone, location: input.location,
+        linkedinUrl: `https://linkedin.com/in/${profileSlug}`,
+        githubUrl: input.roleAppliedFor === "Product Engineer" ? `https://github.com/${profileSlug}` : null,
+        educationSummary: educationSummaries[index],
+        currentTitle: currentTitles[index],
+        currentCompany: currentCompanies[index],
+        projectsSummary: `Selected work includes ${input.resumeText.split(".").slice(0, 2).join(".").trim()}.`,
+        yearsExperience: yearsExperience[index],
+        resumeSummary: `${input.experienceSummary} Core capabilities include ${input.skills.slice(0, 6).join(", ")}.`,
         roleAppliedFor: input.roleAppliedFor, skills: input.skills, experienceSummary: input.experienceSummary,
         resumeText: input.resumeText, status: input.status, notes: input.notes,
       },
