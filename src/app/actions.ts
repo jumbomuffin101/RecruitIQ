@@ -9,7 +9,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { analyzeCandidateForJobWithFallback } from "@/lib/ai";
-import { getDemoOrganization } from "@/lib/data";
+import { getWorkspaceOrganization } from "@/lib/data";
 import { getPrisma } from "@/lib/prisma";
 
 function requiredString(formData: FormData, key: string) {
@@ -34,7 +34,7 @@ function parseSkills(value: string) {
 
 export async function createJob(formData: FormData) {
   const prisma = getPrisma();
-  const org = await getDemoOrganization();
+  const org = await getWorkspaceOrganization();
 
   await prisma.job.create({
     data: {
@@ -64,7 +64,7 @@ export async function createJob(formData: FormData) {
 
 export async function createCandidate(formData: FormData) {
   const prisma = getPrisma();
-  const org = await getDemoOrganization();
+  const org = await getWorkspaceOrganization();
   const roleAppliedFor = requiredString(formData, "roleAppliedFor");
   const candidate = await prisma.candidate.create({
     data: {
@@ -118,7 +118,7 @@ export async function updateCandidateStatus(formData: FormData) {
   const prisma = getPrisma();
   const candidateId = requiredString(formData, "candidateId");
   const status = String(formData.get("status") ?? "APPLIED") as CandidateStatus;
-  const org = await getDemoOrganization();
+  const org = await getWorkspaceOrganization();
 
   const candidate = await prisma.candidate.update({
     where: { id: candidateId },
@@ -145,7 +145,7 @@ export async function updateCandidateStatus(formData: FormData) {
 export async function generateCandidateAnalysis(formData: FormData) {
   const prisma = getPrisma();
   const candidateId = requiredString(formData, "candidateId");
-  const org = await getDemoOrganization();
+  const org = await getWorkspaceOrganization();
   const candidate = await prisma.candidate.findFirst({
     where: { id: candidateId, organizationId: org.id },
     include: { applications: { include: { job: true } } },

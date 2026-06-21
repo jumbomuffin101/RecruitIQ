@@ -12,7 +12,7 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/demo", label: "Demo", icon: Map },
+  { href: "/quick-start", label: "Quick Start", icon: Map },
   { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
   { href: "/candidates", label: "Candidates", icon: Users },
   { href: "/pipeline", label: "Pipeline", icon: Workflow },
@@ -50,9 +50,9 @@ export function AppSidebar() {
       </nav>
 
       <div className="absolute bottom-5 left-4 right-4 rounded-lg bg-slate-950 p-4 text-white ring-1 ring-white/10">
-        <p className="text-sm font-semibold">Copilot demo mode</p>
+        <p className="text-sm font-semibold">Recruiter Copilot</p>
         <p className="mt-1 text-xs leading-5 text-slate-300">
-          Resume parsing, ranking, interview kits, and optional OpenRouter analysis.
+          Resume intelligence, candidate ranking, interview kits, and prioritized actions.
         </p>
       </div>
     </aside>

@@ -8,14 +8,9 @@ async function main() {
 
   const org = await prisma.organization.create({
     data: {
-      name: "RecruitIQ Demo Co.",
+      name: "Northstar Labs",
       slug: "recruitiq-demo",
-      users: {
-        create: {
-          name: "Demo Recruiter",
-          email: "demo@recruitiq.app",
-        },
-      },
+      users: { create: { name: "Alex Morgan", email: "alex@northstarlabs.example" } },
     },
   });
 
@@ -28,192 +23,179 @@ async function main() {
         location: "Remote, US",
         type: JobType.FULL_TIME,
         status: JobStatus.OPEN,
-        description:
-          "Build customer-facing workflow features for a fast-moving B2B SaaS product. Partner with design, product, and founders to ship high-quality interfaces.",
-        requirements:
-          "React, Next.js, TypeScript, PostgreSQL, API design, product analytics, strong communication, and comfort working with lean teams.",
+        description: "Build customer-facing workflow features for a fast-moving B2B SaaS platform and partner directly with product, design, and customers.",
+        requirements: "React, Next.js, TypeScript, PostgreSQL, Prisma, API design, product analytics, testing, and strong communication.",
       },
     }),
     prisma.job.create({
       data: {
         organizationId: org.id,
-        title: "Growth Operations Associate",
-        department: "Operations",
+        title: "Customer Success Manager",
+        department: "Customer Success",
         location: "New York, NY",
         type: JobType.FULL_TIME,
         status: JobStatus.OPEN,
-        description:
-          "Own recruiting operations, outbound campaigns, funnel reporting, and candidate coordination for campus and startup customers.",
-        requirements:
-          "Operations, analytics, CRM, customer communication, sourcing, process design, spreadsheet modeling, and strong written communication.",
+        description: "Own onboarding, adoption, renewals, and executive relationships for a portfolio of growing B2B customers.",
+        requirements: "Customer success, onboarding, SaaS, analytics, CRM, stakeholder management, communication, renewals, and process design.",
       },
     }),
     prisma.job.create({
       data: {
         organizationId: org.id,
-        title: "Design Intern",
+        title: "Growth Operations Specialist",
+        department: "Growth",
+        location: "Austin, TX",
+        type: JobType.FULL_TIME,
+        status: JobStatus.OPEN,
+        description: "Improve acquisition and recruiting funnels through campaign operations, CRM systems, reporting, and experimentation.",
+        requirements: "Operations, analytics, CRM, SQL, lifecycle marketing, experimentation, spreadsheet modeling, and written communication.",
+      },
+    }),
+    prisma.job.create({
+      data: {
+        organizationId: org.id,
+        title: "Product Designer",
         department: "Product",
-        location: "Hybrid",
-        type: JobType.INTERNSHIP,
-        status: JobStatus.PAUSED,
-        description:
-          "Support product design, prototype review, and customer research for hiring teams using RecruitIQ.",
-        requirements:
-          "Figma, product design, user research, communication, visual systems, prototyping, and collaboration with engineering.",
+        location: "Hybrid - San Francisco, CA",
+        type: JobType.FULL_TIME,
+        status: JobStatus.OPEN,
+        description: "Own end-to-end product design for complex recruiting workflows, from customer research through production-ready interaction design.",
+        requirements: "Figma, product design, user research, prototyping, design systems, accessibility, analytics, and engineering collaboration.",
       },
     }),
   ]);
 
   const candidateInputs = [
     {
-      name: "Maya Chen",
-      email: "maya.chen@example.com",
-      phone: "415-555-0112",
-      location: "San Francisco, CA",
-      roleAppliedFor: "Product Engineer",
-      skills: ["React", "Next.js", "TypeScript", "PostgreSQL", "Analytics"],
-      experienceSummary:
-        "Full-stack engineer who shipped onboarding, billing, and analytics workflows at two early-stage SaaS companies.",
-      resumeText:
-        "Built React and Next.js dashboards using TypeScript, Prisma, PostgreSQL, and event-based product analytics. Led API design for user onboarding and partnered with product managers to improve activation by 18%. Comfortable working directly with founders and customers in ambiguous environments.",
-      status: CandidateStatus.INTERVIEW,
-      job: jobs[0],
-      notes: "Strong product sense and clear ownership examples.",
+      name: "Maya Chen", email: "maya.chen@example.com", phone: "415-555-0112", location: "San Francisco, CA", roleAppliedFor: "Product Engineer",
+      skills: ["React", "Next.js", "TypeScript", "PostgreSQL", "Prisma", "Analytics"],
+      experienceSummary: "Senior product engineer who has shipped onboarding, billing, analytics, and workflow automation at two B2B SaaS companies.",
+      resumeText: "Led React and Next.js product development with TypeScript, Prisma, PostgreSQL, API design, automated testing, and event-based product analytics. Improved activation by 18%, mentored three engineers, and regularly joined customer discovery calls.",
+      status: CandidateStatus.OFFER, job: jobs[0], notes: "Exceptional product judgment and complete technical match.", analyzed: true, scoreOverride: 94,
     },
     {
-      name: "Jordan Patel",
-      email: "jordan.patel@example.com",
-      phone: "212-555-0144",
-      location: "Brooklyn, NY",
-      roleAppliedFor: "Growth Operations Associate",
-      skills: ["Operations", "CRM", "Analytics", "Customer Communication", "Sourcing"],
-      experienceSummary:
-        "Operations generalist with experience improving recruiting funnels and customer onboarding programs.",
-      resumeText:
-        "Managed CRM hygiene, candidate sourcing, outbound campaigns, and weekly funnel reports for a student-run consulting group. Created spreadsheet models for conversion tracking and wrote customer-facing documentation for onboarding workflows.",
-      status: CandidateStatus.SCREENED,
-      job: jobs[1],
-      notes: "Good match for ops-heavy customer workflows.",
+      name: "Noah Williams", email: "noah.williams@example.com", phone: "206-555-0182", location: "Seattle, WA", roleAppliedFor: "Product Engineer",
+      skills: ["React", "TypeScript", "Node", "PostgreSQL", "API"],
+      experienceSummary: "Full-stack engineer with four years of experience building customer-facing workflow products and internal analytics tools.",
+      resumeText: "Built React and TypeScript applications backed by Node APIs and PostgreSQL. Owned an integration platform, improved test coverage, and partnered with designers on accessible responsive interfaces. Learning Next.js and Prisma.",
+      status: CandidateStatus.INTERVIEW, job: jobs[0], notes: "Strong fundamentals; validate Next.js depth.", analyzed: true, scoreOverride: 82,
     },
     {
-      name: "Elena Rodriguez",
-      email: "elena.rodriguez@example.com",
-      phone: "305-555-0199",
-      location: "Miami, FL",
-      roleAppliedFor: "Design Intern",
-      skills: ["Figma", "Product Design", "User Research", "Prototyping"],
-      experienceSummary:
-        "Product design student focused on hiring marketplace flows, accessibility, and polished interactive prototypes.",
-      resumeText:
-        "Designed Figma prototypes for a campus job board, ran user research with 18 students, and documented a small visual system for cards, forms, and navigation. Collaborated with engineers to clarify responsive behavior and edge states.",
-      status: CandidateStatus.APPLIED,
-      job: jobs[2],
-      notes: "Portfolio has strong UX process.",
+      name: "Samir Khan", email: "samir.khan@example.com", phone: "646-555-0120", location: "Jersey City, NJ", roleAppliedFor: "Product Engineer",
+      skills: ["JavaScript", "Node", "SQL", "AWS", "API"],
+      experienceSummary: "Backend-leaning engineer with solid API and SQL experience who is transitioning toward product engineering.",
+      resumeText: "Built Node APIs, SQL reporting jobs, and AWS Lambda utilities for operations tooling. Experienced in production debugging and service ownership, with limited direct React, Next.js, and product analytics work.",
+      status: CandidateStatus.SCREENED, job: jobs[0], notes: "Potential platform fit; frontend depth remains a gap.", analyzed: true, scoreOverride: 66,
     },
     {
-      name: "Samir Khan",
-      email: "samir.khan@example.com",
-      phone: "646-555-0120",
-      location: "Jersey City, NJ",
-      roleAppliedFor: "Product Engineer",
-      skills: ["JavaScript", "Node", "SQL", "AWS"],
-      experienceSummary:
-        "Backend-leaning engineer with solid API and SQL experience, newer to React and product analytics.",
-      resumeText:
-        "Built Node APIs, SQL reporting jobs, and AWS Lambda utilities for internal operations tooling. Has production debugging experience and collaborated with sales operations, but has limited direct React or Next.js project work.",
-      status: CandidateStatus.APPLIED,
-      job: jobs[0],
-      notes: "Potential backend fit; validate frontend depth.",
+      name: "Tessa Green", email: "tessa.green@example.com", phone: "312-555-0166", location: "Chicago, IL", roleAppliedFor: "Product Engineer",
+      skills: ["WordPress", "HTML", "CSS"],
+      experienceSummary: "Freelance web producer focused on marketing websites and content updates.",
+      resumeText: "Maintained WordPress sites, created landing pages with HTML and CSS, and coordinated content launches. No production TypeScript, React, PostgreSQL, API, or SaaS product engineering experience.",
+      status: CandidateStatus.REJECTED, job: jobs[0], notes: "Experience does not meet the core engineering requirements.", analyzed: true, scoreOverride: 31,
     },
     {
-      name: "Avery Brooks",
-      email: "avery.brooks@example.com",
-      phone: "617-555-0155",
-      location: "Boston, MA",
-      roleAppliedFor: "Growth Operations Associate",
+      name: "Priya Shah", email: "priya.shah@example.com", phone: "917-555-0134", location: "New York, NY", roleAppliedFor: "Customer Success Manager",
+      skills: ["Customer Success", "SaaS", "CRM", "Analytics", "Onboarding", "Renewals"],
+      experienceSummary: "Customer success leader who managed a $2.4M SaaS portfolio with 96% gross retention.",
+      resumeText: "Owned onboarding, adoption, executive business reviews, renewal forecasting, CRM hygiene, and health-score analytics for 42 B2B customers. Built playbooks that reduced time-to-value by 25% and improved expansion pipeline.",
+      status: CandidateStatus.OFFER, job: jobs[1], notes: "Top candidate with strong commercial and operational depth.", analyzed: true, scoreOverride: 91,
+    },
+    {
+      name: "Liam O'Connor", email: "liam.oconnor@example.com", phone: "617-555-0108", location: "Boston, MA", roleAppliedFor: "Customer Success Manager",
+      skills: ["Customer Success", "Onboarding", "Communication", "CRM", "SaaS"],
+      experienceSummary: "Customer success professional with strong onboarding and relationship management experience.",
+      resumeText: "Managed 28 mid-market SaaS accounts, led onboarding plans, documented customer risks in CRM, and partnered with support and product. Limited ownership of renewals forecasting and quantitative health scoring.",
+      status: CandidateStatus.SCREENED, job: jobs[1], notes: "Strong communicator; probe commercial ownership.", analyzed: true, scoreOverride: 73,
+    },
+    {
+      name: "Camille Martin", email: "camille.martin@example.com", phone: "404-555-0194", location: "Atlanta, GA", roleAppliedFor: "Customer Success Manager",
+      skills: ["Support", "Communication", "Training", "CRM"],
+      experienceSummary: "Customer support team lead moving into proactive customer success.",
+      resumeText: "Led an eight-person support team, created customer training content, tracked escalations in CRM, and partnered with product on feedback. Seeking first role with direct ownership of onboarding, adoption, and renewals.",
+      status: CandidateStatus.APPLIED, job: jobs[1], notes: "New application; needs structured review.", analyzed: false, scoreOverride: 58,
+    },
+    {
+      name: "Jordan Patel", email: "jordan.patel@example.com", phone: "212-555-0144", location: "Brooklyn, NY", roleAppliedFor: "Growth Operations Specialist",
+      skills: ["Operations", "CRM", "Analytics", "SQL", "Experimentation", "Sourcing"],
+      experienceSummary: "Growth operations generalist who improved acquisition funnels and automated weekly performance reporting.",
+      resumeText: "Owned CRM architecture, SQL funnel reporting, lifecycle experiments, outbound operations, and spreadsheet forecasting. Automated lead routing and improved qualified conversion by 22% across two quarters.",
+      status: CandidateStatus.INTERVIEW, job: jobs[2], notes: "Excellent analytical and systems fit.", analyzed: true, scoreOverride: 86,
+    },
+    {
+      name: "Zoe Nguyen", email: "zoe.nguyen@example.com", phone: "512-555-0175", location: "Austin, TX", roleAppliedFor: "Growth Operations Specialist",
+      skills: ["Analytics", "CRM", "Lifecycle Marketing", "Operations", "Excel"],
+      experienceSummary: "Lifecycle marketer with hands-on CRM operations and campaign analytics experience.",
+      resumeText: "Built lifecycle campaigns, maintained CRM segments, analyzed conversion cohorts, and created spreadsheet models for channel performance. Comfortable running experiments; developing SQL proficiency.",
+      status: CandidateStatus.SCREENED, job: jobs[2], notes: "Good operating profile; validate SQL fluency.", analyzed: true, scoreOverride: 76,
+    },
+    {
+      name: "Avery Brooks", email: "avery.brooks@example.com", phone: "617-555-0155", location: "Boston, MA", roleAppliedFor: "Growth Operations Specialist",
       skills: ["Marketing", "Sales", "Communication", "CRM"],
-      experienceSummary:
-        "Early-career marketer with strong outbound writing and customer follow-up experience.",
-      resumeText:
-        "Supported sales campaigns, customer research calls, CRM cleanup, and event follow-up. Wrote outbound email sequences and summarized customer feedback for leadership. Developing deeper analytics and operations skills.",
-      status: CandidateStatus.REJECTED,
-      job: jobs[1],
-      notes: "Good communicator, but weaker analytics fit for this role.",
+      experienceSummary: "Early-career marketer with outbound writing and event follow-up experience.",
+      resumeText: "Supported sales campaigns, basic CRM cleanup, event logistics, and email writing. Has not owned analytics, SQL, experimentation, lifecycle operations, or forecasting workflows.",
+      status: CandidateStatus.REJECTED, job: jobs[2], notes: "Limited analytical depth for this role.", analyzed: true, scoreOverride: 43,
+    },
+    {
+      name: "Elena Rodriguez", email: "elena.rodriguez@example.com", phone: "305-555-0199", location: "Miami, FL", roleAppliedFor: "Product Designer",
+      skills: ["Figma", "Product Design", "User Research", "Prototyping", "Design Systems", "Accessibility"],
+      experienceSummary: "Product designer with deep workflow UX experience and a strong track record partnering with engineering.",
+      resumeText: "Led Figma design for complex B2B workflows, ran customer research, maintained a multi-product design system, shipped accessible interaction patterns, and used analytics to validate onboarding improvements.",
+      status: CandidateStatus.INTERVIEW, job: jobs[3], notes: "Excellent craft and systems thinking.", analyzed: true, scoreOverride: 89,
+    },
+    {
+      name: "Marcus Lee", email: "marcus.lee@example.com", phone: "510-555-0188", location: "Oakland, CA", roleAppliedFor: "Product Designer",
+      skills: ["Figma", "Visual Design", "Prototyping", "Brand"],
+      experienceSummary: "Visual designer expanding into product UX and interaction design.",
+      resumeText: "Created polished Figma prototypes, brand systems, campaign assets, and marketing websites. Collaborated with developers but has limited user research, product analytics, accessibility, and complex workflow experience.",
+      status: CandidateStatus.APPLIED, job: jobs[3], notes: "Portfolio review needed before screening.", analyzed: false, scoreOverride: 62,
     },
   ];
 
   for (const input of candidateInputs) {
     const candidate = await prisma.candidate.create({
       data: {
-        organizationId: org.id,
-        name: input.name,
-        email: input.email,
-        phone: input.phone,
-        location: input.location,
-        roleAppliedFor: input.roleAppliedFor,
-        skills: input.skills,
-        experienceSummary: input.experienceSummary,
-        resumeText: input.resumeText,
-        status: input.status,
-        notes: input.notes,
+        organizationId: org.id, name: input.name, email: input.email, phone: input.phone, location: input.location,
+        roleAppliedFor: input.roleAppliedFor, skills: input.skills, experienceSummary: input.experienceSummary,
+        resumeText: input.resumeText, status: input.status, notes: input.notes,
       },
     });
-
     const analysis = analyzeCandidateForJob(candidate, input.job);
-
     await prisma.application.create({
       data: {
-        organizationId: org.id,
-        candidateId: candidate.id,
-        jobId: input.job.id,
-        status: input.status,
-        fitScore: analysis.fitScore,
+        organizationId: org.id, candidateId: candidate.id, jobId: input.job.id, status: input.status,
+        fitScore: input.analyzed ? input.scoreOverride : null,
       },
     });
-
-    await prisma.resumeAnalysis.create({
-      data: {
-        candidateId: candidate.id,
-        jobId: input.job.id,
-        fitScore: analysis.fitScore,
-        summary: analysis.summary,
-        strengths: analysis.strengths,
-        gaps: analysis.gaps,
-        recommendedStage: analysis.recommendedStage,
-      },
-    });
-
-    await prisma.interviewKit.create({
-      data: {
-        candidateId: candidate.id,
-        jobId: input.job.id,
-        questions: analysis.interviewQuestions,
-        focusAreas: analysis.gaps,
-      },
-    });
+    if (input.analyzed) {
+      await prisma.resumeAnalysis.create({
+        data: {
+          candidateId: candidate.id, jobId: input.job.id, fitScore: input.scoreOverride,
+          summary: analysis.summary, strengths: analysis.strengths, gaps: analysis.gaps,
+          recommendedStage: analysis.recommendedStage,
+        },
+      });
+      await prisma.interviewKit.create({
+        data: { candidateId: candidate.id, jobId: input.job.id, questions: analysis.interviewQuestions, focusAreas: analysis.gaps },
+      });
+    }
   }
 
+  const now = Date.now();
   await prisma.activityLog.createMany({
     data: [
-      {
-        organizationId: org.id,
-        type: ActivityType.JOB_CREATED,
-        message: "Seeded demo jobs for RecruitIQ.",
-      },
-      {
-        organizationId: org.id,
-        type: ActivityType.CANDIDATE_CREATED,
-        message: "Seeded demo candidates and applications.",
-      },
-      {
-        organizationId: org.id,
-        type: ActivityType.ANALYSIS_GENERATED,
-        message: "Generated deterministic AI analysis for demo candidates.",
-      },
+      { organizationId: org.id, type: ActivityType.STATUS_CHANGED, message: "Maya Chen advanced to Offer for Product Engineer.", createdAt: new Date(now - 2 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.ANALYSIS_GENERATED, message: "Recruiter Copilot analysis completed for Elena Rodriguez.", createdAt: new Date(now - 5 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.CANDIDATE_CREATED, message: "Marcus Lee applied for Product Designer.", createdAt: new Date(now - 20 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.STATUS_CHANGED, message: "Jordan Patel advanced to Interview for Growth Operations Specialist.", createdAt: new Date(now - 30 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.ANALYSIS_GENERATED, message: "Recruiter Copilot analysis completed for Priya Shah.", createdAt: new Date(now - 48 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.CANDIDATE_CREATED, message: "Camille Martin applied for Customer Success Manager.", createdAt: new Date(now - 60 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.JOB_CREATED, message: "Product Designer opened in San Francisco.", createdAt: new Date(now - 5 * 24 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.JOB_CREATED, message: "Northstar Labs hiring workspace initialized.", createdAt: new Date(now - 7 * 24 * 60 * 60 * 1000) },
     ],
   });
 
-  console.log("Seeded RecruitIQ demo data.");
+  console.log("Seeded Northstar Labs sample workspace with 4 jobs and 12 candidates.");
 }
 
 main()

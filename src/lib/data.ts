@@ -1,19 +1,19 @@
 import { getPrisma } from "@/lib/prisma";
 import { analyzeCandidateForJob } from "@/lib/ai";
 
-export async function getDemoOrganization() {
+export async function getWorkspaceOrganization() {
   const prisma = getPrisma();
 
   return prisma.organization.upsert({
     where: { slug: "recruitiq-demo" },
-    update: {},
+    update: { name: "Northstar Labs" },
     create: {
-      name: "RecruitIQ Demo Co.",
+      name: "Northstar Labs",
       slug: "recruitiq-demo",
       users: {
         create: {
-          name: "Demo Recruiter",
-          email: "demo@recruitiq.app",
+          name: "Alex Morgan",
+          email: "alex@northstarlabs.example",
         },
       },
     },
@@ -21,7 +21,7 @@ export async function getDemoOrganization() {
 }
 
 export async function getJobs() {
-  const org = await getDemoOrganization();
+  const org = await getWorkspaceOrganization();
   return getPrisma().job.findMany({
     where: { organizationId: org.id },
     include: { applications: true },
@@ -30,7 +30,7 @@ export async function getJobs() {
 }
 
 export async function getCandidates() {
-  const org = await getDemoOrganization();
+  const org = await getWorkspaceOrganization();
   return getPrisma().candidate.findMany({
     where: { organizationId: org.id },
     include: {
@@ -42,7 +42,7 @@ export async function getCandidates() {
 }
 
 export async function getCandidateDetail(id: string) {
-  const org = await getDemoOrganization();
+  const org = await getWorkspaceOrganization();
   return getPrisma().candidate.findFirst({
     where: { id, organizationId: org.id },
     include: {
@@ -54,7 +54,16 @@ export async function getCandidateDetail(id: string) {
 }
 
 export async function getDashboardData() {
-  const [jobs, candidates] = await Promise.all([getJobs(), getCandidates()]);
+  const org = await getWorkspaceOrganization();
+  const [jobs, candidates, recentActivity] = await Promise.all([
+    getJobs(),
+    getCandidates(),
+    getPrisma().activityLog.findMany({
+      where: { organizationId: org.id },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+  ]);
 
   const openJobs = jobs.filter((job) => job.status === "OPEN").length;
   const interviewsScheduled = candidates.filter((candidate) => candidate.status === "INTERVIEW").length;
@@ -67,6 +76,13 @@ export async function getDashboardData() {
   const topCandidates = [...candidates]
     .sort((a, b) => (b.resumeAnalyses[0]?.fitScore ?? 0) - (a.resumeAnalyses[0]?.fitScore ?? 0))
     .slice(0, 4);
+  const candidatesNeedingReview = candidates.filter((candidate) => candidate.status === "APPLIED").length;
+  const highFitCandidates = candidates.filter((candidate) => {
+    const score = candidate.resumeAnalyses[0]?.fitScore ?? 0;
+    return score >= 80 && ["APPLIED", "SCREENED"].includes(candidate.status);
+  }).length;
+  const jobsWithLowPipeline = jobs.filter((job) => job.status === "OPEN" && job.applications.length < 3).length;
+  const candidatesMissingAnalysis = candidates.filter((candidate) => candidate.resumeAnalyses.length === 0).length;
 
   return {
     jobs,
@@ -77,6 +93,13 @@ export async function getDashboardData() {
     averageFitScore,
     recentCandidates: candidates.slice(0, 5),
     topCandidates,
+    recentActivity,
+    actionCenter: {
+      candidatesNeedingReview,
+      highFitCandidates,
+      jobsWithLowPipeline,
+      candidatesMissingAnalysis,
+    },
   };
 }
 
@@ -179,6 +202,8 @@ export async function getCompareData(jobId?: string) {
           }
         : analyzeCandidateForJob(candidate, selectedJob);
       const fitScore = savedApplication?.fitScore ?? analysis.fitScore;
+      const jobText = `${selectedJob.title} ${selectedJob.description} ${selectedJob.requirements}`.toLowerCase();
+      const matchingSkills = candidate.skills.filter((skill) => jobText.includes(skill.toLowerCase()));
 
       return {
         id: candidate.id,
@@ -186,6 +211,7 @@ export async function getCompareData(jobId?: string) {
         roleAppliedFor: candidate.roleAppliedFor,
         status: candidate.status,
         skills: candidate.skills,
+        matchingSkills: matchingSkills.length ? matchingSkills : candidate.skills.slice(0, 3),
         fitScore,
         strengths: analysis.strengths,
         gaps: analysis.gaps,

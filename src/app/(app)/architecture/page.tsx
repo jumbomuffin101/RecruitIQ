@@ -1,27 +1,33 @@
-import { ArrowRight, BrainCircuit, Cloud, Database, Layers3, ServerCog, Workflow } from "lucide-react";
+import { ArrowRight, BrainCircuit, Cloud, Database, Layers3, ServerCog, UserRound, Workflow } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 
 const architectureSteps = [
   {
-    title: "Vercel Frontend",
+    title: "Recruiter",
+    subtitle: "User experience",
+    description: "Hiring teams manage jobs, resumes, candidates, decisions, and pipeline activity.",
+    icon: UserRound,
+  },
+  {
+    title: "Vercel",
     subtitle: "Next.js App Router",
-    description: "Server-rendered pages, React UI, responsive Tailwind screens, and Vercel deployment.",
+    description: "Server-rendered React UI, responsive Tailwind screens, and production deployment.",
     icon: Cloud,
   },
   {
-    title: "Application Layer",
+    title: "Backend Logic",
     subtitle: "Server Actions / API routes",
     description: "Create jobs, add candidates, update stages, generate analysis, and revalidate app views.",
     icon: ServerCog,
   },
   {
-    title: "Data Access",
+    title: "Prisma",
     subtitle: "Prisma ORM",
     description: "Typed models, relations, enums, and PostgreSQL-safe queries for all hiring workflows.",
     icon: Layers3,
   },
   {
-    title: "Database Layer",
+    title: "Amazon Aurora",
     subtitle: "PostgreSQL",
     description: "Jobs, candidates, applications, resume analyses, interview kits, users, organizations, and activity logs.",
     icon: Database,
@@ -29,8 +35,8 @@ const architectureSteps = [
 ];
 
 const proofCards = [
-  ["Hackathon target", "Amazon Aurora PostgreSQL-compatible database"],
-  ["Development/demo", "Neon PostgreSQL, PostgreSQL-compatible"],
+  ["Production database", "Amazon Aurora PostgreSQL"],
+  ["Deployment", "Vercel with Next.js server functions"],
   ["ORM", "Prisma with a PostgreSQL datasource"],
   ["AI service", "Optional OpenRouter; deterministic fallback always available"],
 ];
@@ -45,7 +51,7 @@ export default function ArchitecturePage() {
       />
 
       <section className="surface rounded-lg p-5">
-        <div className="grid gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 lg:grid-cols-5">
           {architectureSteps.map((step, index) => (
             <div key={step.title} className="relative rounded-lg border border-slate-200 bg-white p-5">
               <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
@@ -70,8 +76,8 @@ export default function ArchitecturePage() {
           <p className="mt-3 text-sm leading-6 text-slate-600">
             RecruitIQ uses Prisma with a PostgreSQL datasource and models recruiting data as relational
             records: organizations own jobs, candidates, applications, resume analyses, interview kits, and
-            activity logs. The current demo can run on Neon PostgreSQL, and the same schema is designed for
-            Amazon Aurora PostgreSQL as the hackathon target database.
+            activity logs. Production data is stored in Amazon Aurora PostgreSQL, providing transactional
+            integrity and a scalable relational foundation for recruiting operations.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {proofCards.map(([label, value]) => (
@@ -95,7 +101,7 @@ export default function ArchitecturePage() {
           </div>
           <div className="mt-6 space-y-3 text-sm leading-6 text-slate-300">
             <p className="rounded-lg bg-white/10 p-3">If `OPENROUTER_API_KEY` exists, Server Actions call OpenRouter server-side.</p>
-            <p className="rounded-lg bg-white/10 p-3">If the provider is absent or fails, deterministic mock scoring keeps the demo working.</p>
+            <p className="rounded-lg bg-white/10 p-3">If the provider is absent or fails, deterministic scoring keeps every workflow available.</p>
             <p className="rounded-lg bg-white/10 p-3">No API keys are exposed to client components.</p>
           </div>
         </div>
@@ -106,8 +112,7 @@ export default function ArchitecturePage() {
           <Workflow className="mt-1 h-5 w-5 shrink-0 text-emerald-700" />
           <p className="text-sm leading-6 text-emerald-950">
             Submission explanation: Vercel serves the Next.js app, Server Actions execute trusted mutations,
-            Prisma maps those actions to PostgreSQL tables, and the database layer can be backed by Neon for
-            demo speed or Amazon Aurora PostgreSQL for the AWS target architecture.
+            Prisma maps those actions to normalized PostgreSQL tables stored in Amazon Aurora PostgreSQL.
           </p>
         </div>
       </section>

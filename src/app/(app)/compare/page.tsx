@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, BrainCircuit, Scale } from "lucide-react";
+import { ArrowRight, BrainCircuit, Scale, Users } from "lucide-react";
 import { CandidateAvatar } from "@/components/CandidateAvatar";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { FitScoreBar } from "@/components/FitScoreBar";
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getCompareData } from "@/lib/data";
@@ -56,7 +57,7 @@ export default async function ComparePage({
           </div>
         ) : null}
 
-        <section className="space-y-4">
+        {data.selectedJob && data.rankedCandidates.length ? <section className="space-y-4">
           {data.rankedCandidates.map((candidate, index) => (
             <article key={candidate.id} className="surface rounded-lg p-5">
               <div className="grid gap-5 xl:grid-cols-[1fr_0.7fr_0.7fr] xl:items-start">
@@ -77,7 +78,7 @@ export default async function ComparePage({
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{candidate.roleAppliedFor}</p>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {candidate.skills.slice(0, 5).map((skill) => (
+                        {candidate.matchingSkills.slice(0, 5).map((skill) => (
                           <span key={skill} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                             {skill}
                           </span>
@@ -120,7 +121,14 @@ export default async function ComparePage({
               </Link>
             </article>
           ))}
-        </section>
+        </section> : (
+          <EmptyState
+            icon={Users}
+            title={data.selectedJob ? "No candidates available" : "Create a job to begin comparing"}
+            description={data.selectedJob ? "Add candidates to this workspace, then return here to rank them against the selected role." : "Candidate comparison needs at least one job with requirements."}
+            action={<Link href={data.selectedJob ? "/candidates" : "/jobs"} className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">{data.selectedJob ? "Add candidates" : "Create a job"}</Link>}
+          />
+        )}
       </>
     );
   } catch (error) {

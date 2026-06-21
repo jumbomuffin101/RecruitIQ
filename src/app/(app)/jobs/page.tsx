@@ -62,8 +62,8 @@ export default async function JobsPage() {
                 title="No jobs yet"
                 description="Create your first role to start ranking candidates against real requirements."
                 action={
-                  <Link href="/demo" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
-                    View demo checklist
+                  <Link href="/quick-start" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
+                    Open Quick Start
                   </Link>
                 }
               />

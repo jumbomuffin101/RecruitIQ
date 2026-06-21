@@ -55,8 +55,8 @@ export default function LandingPage() {
           RecruitIQ
         </Link>
         <div className="flex items-center gap-2">
-          <Link href="/demo" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
-            Demo
+          <Link href="/quick-start" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
+            Quick Start
           </Link>
           <Link
             href="/dashboard"
@@ -87,10 +87,10 @@ export default function LandingPage() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/demo"
+                href="/quick-start"
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-900"
               >
-                Start guided demo
+                Explore Quick Start
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
@@ -157,12 +157,14 @@ export default function LandingPage() {
               RecruitIQ turns scattered resume review into a repeatable hiring operating system for lean teams that need structure without enterprise ATS overhead.
             </p>
           </div>
-          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {[
               ["Problem", "Small teams hire from inboxes, spreadsheets, and inconsistent interview notes."],
               ["Solution", "One workflow for jobs, resumes, AI analysis, comparison, pipeline, and analytics."],
-              ["Why pay", "Teams save screening time, standardize interviews, and avoid losing strong candidates."],
-              ["Why PostgreSQL", "Recruiting data is relational, auditable, queryable, and a strong fit for Aurora PostgreSQL."],
+              ["Customer", "Startups, small businesses, recruiting teams, and student organizations with lean hiring operations."],
+              ["Monetization", "SaaS subscription priced per organization or recruiter seat, with higher tiers for automation and analytics."],
+              ["Why teams pay", "Teams save screening time, standardize interviews, and avoid losing strong candidates."],
+              ["Why Aurora", "Relational hiring data needs reliable transactions, auditability, and production-scale PostgreSQL."],
             ].map(([title, copy]) => (
               <article key={title} className="surface rounded-lg p-5">
                 <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
@@ -181,7 +183,7 @@ export default function LandingPage() {
               <div>
                 <h3 className="font-semibold">{step}</h3>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
-                  A practical, demo-ready flow designed for hackathon judges and real hiring operators.
+                  A production-oriented workflow designed for real hiring operators.
                 </p>
               </div>
             </div>
@@ -189,7 +191,7 @@ export default function LandingPage() {
         </div>
       </section>
       <footer className="border-t border-slate-200 bg-white px-6 py-6 text-center text-sm text-slate-500">
-        Powered by Vercel plus AWS Aurora PostgreSQL-compatible architecture.
+        Built with Vercel and Amazon Aurora PostgreSQL.
       </footer>
     </main>
   );

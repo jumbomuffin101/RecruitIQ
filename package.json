@@ -17,7 +17,8 @@
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "unpdf": "^1.6.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "latest",

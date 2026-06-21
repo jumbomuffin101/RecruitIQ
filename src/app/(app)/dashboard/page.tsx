@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, BriefcaseBusiness, CalendarCheck, Scale, Users, Workflow } from "lucide-react";
+import { Activity, AlertCircle, BarChart3, BriefcaseBusiness, CalendarCheck, Scale, Sparkles, UserCheck, Users, Workflow } from "lucide-react";
 import { CandidateCard } from "@/components/CandidateCard";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { PageHeader } from "@/components/PageHeader";
@@ -17,6 +17,12 @@ export default async function DashboardPage() {
       count: data.candidates.filter((candidate) => candidate.status === stage).length,
     }));
     const maxStageCount = Math.max(...stageCounts.map((stage) => stage.count), 1);
+    const actionItems = [
+      { label: "Needs review", value: data.actionCenter.candidatesNeedingReview, description: "New applicants awaiting triage", href: "/pipeline", icon: AlertCircle, tone: "bg-amber-50 text-amber-700" },
+      { label: "Ready for interview", value: data.actionCenter.highFitCandidates, description: "High-fit candidates in early stages", href: "/compare", icon: UserCheck, tone: "bg-emerald-50 text-emerald-700" },
+      { label: "Low pipeline volume", value: data.actionCenter.jobsWithLowPipeline, description: "Open jobs with fewer than 3 applicants", href: "/jobs", icon: BriefcaseBusiness, tone: "bg-blue-50 text-blue-700" },
+      { label: "Missing analysis", value: data.actionCenter.candidatesMissingAnalysis, description: "Profiles that need Copilot review", href: "/candidates", icon: Sparkles, tone: "bg-violet-50 text-violet-700" },
+    ];
 
     return (
       <>
@@ -33,7 +39,7 @@ export default async function DashboardPage() {
         />
         {data.candidates.length > 0 ? (
           <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
-            Seeded demo data is loaded: {data.jobs.length} jobs and {data.candidates.length} candidates are ready for the judge walkthrough.
+            Northstar Labs sample workspace is active with {data.jobs.length} jobs and {data.candidates.length} candidates.
           </div>
         ) : null}
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -41,6 +47,28 @@ export default async function DashboardPage() {
           <StatCard label="Total candidates" value={data.totalCandidates} detail="Across every pipeline stage" icon={Users} accent="blue" />
           <StatCard label="Interviews scheduled" value={data.interviewsScheduled} detail="Candidates currently in interview" icon={CalendarCheck} accent="violet" />
           <StatCard label="Average fit score" value={data.averageFitScore || "Pending"} detail="From generated AI analysis" icon={BarChart3} accent="amber" />
+        </section>
+
+        <section className="mt-8">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Recruiter intelligence</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Action Center</h2>
+            </div>
+            <p className="text-sm text-slate-500">Prioritized signals across your active hiring portfolio.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {actionItems.map((item) => (
+              <Link key={item.label} href={item.href} className="surface rounded-lg p-4 transition hover:-translate-y-0.5 hover:shadow-xl">
+                <div className="flex items-start justify-between gap-3">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${item.tone}`}><item.icon className="h-4 w-4" /></span>
+                  <span className="text-2xl font-semibold text-slate-950">{item.value}</span>
+                </div>
+                <h3 className="mt-4 text-sm font-semibold text-slate-950">{item.label}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p>
+              </Link>
+            ))}
+          </div>
         </section>
 
         <section className="mt-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -85,6 +113,21 @@ export default async function DashboardPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {data.topCandidates.map((candidate) => (
               <CandidateCard key={candidate.id} candidate={candidate} />
+            ))}
+          </div>
+        </section>
+
+        <section className="surface mt-8 rounded-lg p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950"><Activity className="h-5 w-5 text-blue-700" />Recent activity</h2>
+            <Link href="/quick-start" className="text-sm font-semibold text-blue-700 hover:text-blue-900">Quick Start</Link>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {data.recentActivity.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <p className="text-sm leading-6 text-slate-700">{item.message}</p>
+                <time className="shrink-0 text-xs text-slate-400">{item.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</time>
+              </div>
             ))}
           </div>
         </section>

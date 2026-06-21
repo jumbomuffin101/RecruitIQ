@@ -1,97 +1,82 @@
 # RecruitIQ
 
-RecruitIQ is a polished B2B AI-powered applicant tracking system built for the H0 Hackathon. It helps lean teams create roles, upload resumes, rank candidates, manage pipeline stages, and generate structured interview prep.
+RecruitIQ is an AI-powered applicant tracking system for lean hiring teams. It brings jobs, resume intake, candidate ranking, Recruiter Copilot analysis, interview preparation, pipeline management, and hiring analytics into one production-oriented workspace.
 
-## Live Demo
+## H0 Hackathon
 
-- Live demo: `TODO: add Vercel URL`
-- Local demo: `http://localhost:3000`
-- Guided demo route: `/demo`
-- Architecture proof route: `/architecture`
-
-## Hackathon Track
-
-H0 Hackathon Track 2: Monetizable B2B app.
+- Track: **Track 2 - Monetizable B2B app**
+- Deployment: **Vercel**
+- AWS database: **Amazon Aurora PostgreSQL**
+- ORM: **Prisma**
 
 ## Elevator Pitch
 
-RecruitIQ is an AI-powered ATS for lean teams that turns resume review into a structured, monetizable hiring workflow: post roles, upload resumes, score candidates, generate interview prep, compare ranked applicants, and manage the pipeline in one place.
+Small recruiting teams often run hiring from spreadsheets, inboxes, and inconsistent notes. RecruitIQ gives them a focused ATS that parses resumes, explains candidate fit, prioritizes next actions, and keeps every hiring decision connected to structured PostgreSQL data.
 
-## Problem
+## Product Value
 
-Small businesses, startups, and student organizations often hire from inboxes, spreadsheets, and inconsistent interview notes. That makes it hard to compare candidates fairly, preserve context, and move quickly.
+- **Problem:** Manual resume review and fragmented tools make hiring slow and inconsistent.
+- **Solution:** A unified workflow for role creation, resume intake, AI-assisted evaluation, comparison, pipeline decisions, and analytics.
+- **Customer:** Startups, small businesses, lean recruiting teams, and student organizations.
+- **Monetization:** SaaS subscription per organization or recruiter seat, with expansion tiers for automation and analytics.
 
-## Solution
+## Features
 
-RecruitIQ provides a polished B2B recruiting workspace with jobs, candidates, resume parsing, AI fit analysis, interview kits, pipeline stages, comparison views, and analytics. It works with deterministic mock AI by default and can optionally call OpenRouter server-side.
+- Job creation and active hiring portfolio
+- PDF and TXT resume parsing without permanent file storage
+- Manual resume text fallback when extraction is unavailable
+- Candidate profiles with skills, notes, stage, and resume evidence
+- Recruiter Copilot with fit score, executive summary, role match, strengths, risks, next step, and interview kit
+- Optional OpenRouter analysis with deterministic fallback
+- Action Center with prioritized recruiter tasks and recent activity
+- Job-specific ranked candidate comparison
+- Kanban-style pipeline updates
+- Hiring analytics for stages, fit scores, job status, and top skills
+- Quick Start workflow and screenshot-ready architecture page
+- Realistic sample workspace with 4 jobs and 12 candidates
 
-## Database Architecture
+## Architecture
 
-- Required architecture: Amazon Aurora PostgreSQL-compatible PostgreSQL architecture
-- Current deployed demo DB: Neon PostgreSQL
-- Database engine: PostgreSQL
-- Hackathon target: Amazon Aurora PostgreSQL
-- ORM: Prisma
-- Deployment: Vercel
+```text
+Recruiter
+   -> Vercel / Next.js App Router
+   -> Next.js Server Actions and Route Handlers
+   -> Prisma ORM
+   -> Amazon Aurora PostgreSQL
 
-The schema is PostgreSQL-first and uses standard Prisma models, enums, relations, arrays, and JSON metadata that are compatible with Aurora PostgreSQL.
+Optional server-side analysis:
+Server Action -> OpenRouter API
+              -> deterministic fallback when unavailable
+```
 
-### Database Proof Placeholders
+### Database Architecture
 
-- Vercel environment variable screenshot: `TODO: add screenshot showing DATABASE_URL configured`
-- Neon/PostgreSQL database tables screenshot: `TODO: add screenshot showing Prisma-created tables`
-- Later Aurora PostgreSQL screenshot if migrated: `TODO: add Aurora cluster/table screenshot`
+RecruitIQ uses Amazon Aurora PostgreSQL as its production database. Prisma maps organizations, users, jobs, candidates, applications, resume analyses, interview kits, and activity logs into relational PostgreSQL models. Aurora is a strong fit because hiring workflows require reliable transactions, relational integrity, auditable activity, and scalable querying across candidates and roles.
 
-## Demo Features
-
-- Premium landing page for an AI-powered ATS for lean teams
-- Dashboard metrics for open jobs, candidate volume, interviews, and average fit score
-- Job creation and job cards
-- Candidate creation with `.txt` resume upload, parsed text preview, and manual resume fallback
-- Candidate profiles with AI fit score, summary, strengths, gaps, recommended stage, interview questions, notes, and status controls
-- Optional OpenRouter analysis through `OPENROUTER_API_KEY`
-- Deterministic mock AI fallback when no AI key is configured or the provider fails
-- `/compare` page for ranked candidate comparison by selected job
-- `/demo` page for judge walkthrough
-- `/architecture` page for system and database proof
-- Kanban-style pipeline with stage updates
-- Analytics cards and CSS charts for stages, job status, fit score, and top skills
+The Prisma schema uses PostgreSQL-native features and remains portable to other PostgreSQL-compatible environments for local development or migration work.
 
 ## Tech Stack
 
 - Next.js App Router
-- TypeScript
+- React and TypeScript
 - Tailwind CSS
 - Prisma ORM
-- PostgreSQL
-- Neon PostgreSQL for the current development/demo database
-- Amazon Aurora PostgreSQL-compatible target database
-- Vercel deployment
-- Optional OpenRouter AI analysis with deterministic fallback
+- Amazon Aurora PostgreSQL
+- Vercel
+- Optional OpenRouter API
+- `unpdf` serverless PDF text extraction
 
-## Architecture Summary
+## Important Files
 
-- Next.js App Router with TypeScript
-- Tailwind CSS for UI
-- Server Components for data-backed pages
-- Server Actions for create/update/generate workflows
-- Prisma ORM with PostgreSQL datasource
-- Neon PostgreSQL for current demo deployment
-- Aurora PostgreSQL-compatible schema and deployment path
-- Client-side `.txt` parsing stores extracted resume text directly in Postgres
-- Server-only OpenRouter integration with safe JSON schema output and deterministic fallback
-- No authentication yet, by design, to keep the hackathon demo focused and easy to judge
-
-Key files:
-
-- `prisma/schema.prisma`: database models
-- `prisma/seed.ts`: demo data
-- `src/lib/ai.ts`: deterministic mock AI plus optional OpenRouter integration
-- `src/app/actions.ts`: Server Actions
-- `src/app/(app)/compare/page.tsx`: candidate comparison demo
-- `src/app/(app)/demo/page.tsx`: guided judge walkthrough
-- `src/app/(app)/architecture/page.tsx`: architecture and database proof page
-- `src/components/ResumeUploadField.tsx`: resume upload and preview
+- `prisma/schema.prisma`: relational data model
+- `prisma/seed.ts`: Northstar Labs sample workspace
+- `src/app/actions.ts`: trusted server mutations
+- `src/app/api/resume/parse/route.ts`: private PDF/TXT extraction route
+- `src/lib/ai.ts`: OpenRouter integration and deterministic fallback
+- `src/app/(app)/dashboard/page.tsx`: metrics and Action Center
+- `src/app/(app)/compare/page.tsx`: job-specific candidate prioritization
+- `src/app/(app)/architecture/page.tsx`: in-product system architecture
+- `src/app/(app)/quick-start/page.tsx`: guided product workflow
 
 ## Environment Variables
 
@@ -103,104 +88,81 @@ OPENROUTER_BASE_URL=
 NEXT_PUBLIC_APP_URL=
 ```
 
-`DATABASE_URL` should point to Neon PostgreSQL for the current demo or Amazon Aurora PostgreSQL for the target AWS deployment. `OPENROUTER_API_KEY` is optional. If `OPENROUTER_MODEL` or `OPENROUTER_BASE_URL` are blank, the app uses safe server-side defaults.
+- `DATABASE_URL` is required and should point to Amazon Aurora PostgreSQL in production.
+- `OPENROUTER_API_KEY` is optional and is only read by server-side code.
+- When OpenRouter is missing or unavailable, RecruitIQ uses deterministic candidate analysis.
+- No resume files are stored or exposed publicly; only extracted text is saved to PostgreSQL.
 
 ## Local Setup
 
-1. Install dependencies:
-
 ```bash
 npm install
-```
-
-2. Configure environment variables:
-
-```bash
 cp .env.example .env
+npm run db:generate
+npm run db:push
+npm run db:seed
+npm run dev
 ```
 
-3. Start a local PostgreSQL database if needed:
+Open `http://localhost:3000`.
+
+For local PostgreSQL with Docker:
 
 ```bash
 docker compose up -d postgres
 ```
 
-4. Generate Prisma Client and push the schema:
+## Vercel Deployment
 
-```bash
-npx prisma generate
-npx prisma db push
-```
+1. Import the repository into Vercel.
+2. Add the Aurora PostgreSQL connection string as `DATABASE_URL`.
+3. Optionally configure the OpenRouter variables.
+4. Apply the Prisma schema to the production database.
+5. Seed the sample workspace only when a populated evaluation environment is desired.
 
-5. Seed demo data:
+## Demo Walkthrough
 
-```bash
-npm run db:seed
-```
-
-6. Start the app:
-
-```bash
-npm run dev
-```
-
-## Demo Script
-
-1. Open the landing page and describe RecruitIQ as an AI-powered ATS for lean teams.
-2. Go to `/dashboard` to show hiring health and top candidates.
-3. Go to `/candidates` and add a candidate with a `.txt` resume upload.
-4. Open the candidate profile and click `Generate AI Analysis`.
-5. Show fit score, strengths, gaps, recommended stage, and interview questions.
-6. Go to `/compare`, select a job, and review ranked candidates with next actions.
-7. Go to `/pipeline` and update a candidate stage.
-8. Finish with `/analytics` to show hiring-stage and skill insights.
-
-## Why Teams Would Pay
-
-- Reduces manual screening time for small hiring teams
-- Produces consistent interview prep from resume and job data
-- Helps founders and operators compare candidates without building custom spreadsheets
-- Keeps recruiting records queryable and auditable in PostgreSQL
+1. Open `/quick-start` for the guided product flow.
+2. Review the dashboard metrics and prioritized Action Center.
+3. Create a job or inspect the existing Northstar Labs roles.
+4. Upload a PDF or TXT resume from `/candidates` and review the extracted text.
+5. Open a candidate and generate Recruiter Copilot analysis.
+6. Show the fit score, evidence, risks, suggested next step, and interview kit.
+7. Use `/compare` to rank applicants for a selected job.
+8. Move a candidate in `/pipeline` and finish with `/analytics`.
+9. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
 
 ## Challenges
 
-- Keeping the demo reliable without requiring paid storage, auth, or external AI keys
-- Making AI output feel useful while preserving deterministic fallback behavior
-- Explaining the Aurora PostgreSQL target clearly while using Neon PostgreSQL for fast deployment
+- Supporting resume extraction without permanent object storage or public file URLs
+- Keeping AI workflows reliable when external keys or providers are unavailable
+- Presenting complex recruiting evidence in a compact interface
+- Building a production database story that is easy to explain during judging
 
 ## What We Learned
 
-- Recruiting data maps naturally to relational models: jobs, candidates, applications, analyses, kits, and activity logs
-- Server Actions are a strong fit for a compact B2B workflow demo
-- A fallback AI path is essential for judge reliability
+- Recruiting data maps naturally to relational PostgreSQL models and transactions.
+- Server Actions are effective for compact B2B workflows with trusted mutations.
+- AI output becomes more useful when paired with evidence, risks, and a concrete next action.
+- A deterministic fallback is essential for production reliability and live judging.
 
-## What's Next
+## Future Roadmap
 
-- Add authentication and organization-level permissions
-- Add PDF parsing and persistent object storage when file retention is required
-- Add Amazon Bedrock provider support alongside OpenRouter
-- Move production database to Amazon Aurora PostgreSQL
-- Add score history, interviewer feedback, and email/calendar integrations
+- Authentication and organization permissions
+- Interviewer scorecards and collaborative feedback
+- Email and calendar integrations
+- Durable resume storage when retention is required
+- Amazon Bedrock provider support
+- Candidate score history and configurable evaluation rubrics
+- Billing and plan management after product validation
 
-## H0 Hackathon Note
+## Security Notes
 
-RecruitIQ is submitted for H0 Hackathon Track 2: Monetizable B2B app. The product is intentionally scoped as a deployable MVP that demonstrates a credible paid workflow for lean hiring teams while meeting the PostgreSQL/Aurora-compatible database requirement.
-
-## Vercel Deployment Notes
-
-- Create a Vercel project from this repository.
-- Add `DATABASE_URL` using the Neon PostgreSQL connection string for the current demo.
-- Optionally add `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `OPENROUTER_BASE_URL`.
-- Run `npx prisma db push` against the deployed database before demo seeding.
-- Seed with `npm run db:seed` from a trusted local environment connected to the deployed database.
-
-## Future AWS Aurora Deployment Notes
-
-- Provision Amazon Aurora PostgreSQL.
-- Set Vercel `DATABASE_URL` to the Aurora PostgreSQL connection string.
-- Run Prisma migrations or `prisma db push` against Aurora.
-- Keep the current OpenRouter fallback model, or replace the TODO in `src/lib/ai.ts` / `src/app/actions.ts` with Amazon Bedrock analysis.
-- Add S3 only when persistent file storage is required; the MVP currently stores parsed resume text in PostgreSQL.
+- `.env` and `.env*.local` are gitignored.
+- `.env.example` contains placeholders only.
+- OpenRouter keys are never exposed to client components.
+- Resume parsing is size-limited, processed server-side, and not persisted as a file.
+- Database access is initialized lazily so Vercel builds remain safe.
 
 ## Validation
 

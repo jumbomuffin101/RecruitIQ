@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BrainCircuit, CheckCircle2, CircleAlert, Mail, MapPin, Phone, Sparkles } from "lucide-react";
+import { ArrowLeft, BrainCircuit, CheckCircle2, CircleAlert, FileSearch, ListChecks, Mail, MapPin, MessageSquareText, Phone, Target, UsersRound, Wrench } from "lucide-react";
 import { generateCandidateAnalysis, updateCandidateStatus } from "@/app/actions";
 import { CandidateAvatar } from "@/components/CandidateAvatar";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { FitScoreBar } from "@/components/FitScoreBar";
+import { GenerateAnalysisButton } from "@/components/GenerateAnalysisButton";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatEnum } from "@/lib/utils";
@@ -31,6 +32,16 @@ export default async function CandidateDetailPage({
     const analysis = candidate.resumeAnalyses[0];
     const kit = candidate.interviewKits[0];
     const application = candidate.applications[0];
+    const jobText = `${application?.job.description ?? ""} ${application?.job.requirements ?? ""}`.toLowerCase();
+    const matchedSkills = candidate.skills.filter((skill) => jobText.includes(skill.toLowerCase()));
+    const technicalQuestions = kit ? [kit.questions[0], kit.questions[3]].filter(Boolean) : [];
+    const behavioralQuestions = kit ? [kit.questions[2]].filter(Boolean) : [];
+    const resumeSpecificQuestions = kit ? [kit.questions[1], ...kit.questions.slice(4)].filter(Boolean) : [];
+    const questionGroups = [
+      { title: "Technical", questions: technicalQuestions, icon: Wrench, tone: "bg-blue-50 text-blue-950" },
+      { title: "Behavioral", questions: behavioralQuestions, icon: UsersRound, tone: "bg-emerald-50 text-emerald-950" },
+      { title: "Resume-specific", questions: resumeSpecificQuestions, icon: FileSearch, tone: "bg-violet-50 text-violet-950" },
+    ];
 
     return (
       <>
@@ -65,10 +76,7 @@ export default async function CandidateDetailPage({
               <StatusBadge status={candidate.status} />
               <form action={generateCandidateAnalysis}>
                 <input type="hidden" name="candidateId" value={candidate.id} />
-                <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-900">
-                  <Sparkles className="h-4 w-4" />
-                  {analysis ? "Regenerate AI Analysis" : "Generate AI Analysis"}
-                </button>
+                <GenerateAnalysisButton hasAnalysis={Boolean(analysis)} />
               </form>
             </div>
           </div>
@@ -132,7 +140,7 @@ export default async function CandidateDetailPage({
                 <div>
                   <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
                     <BrainCircuit className="h-5 w-5 text-blue-700" />
-                    AI recruiting copilot
+                    Recruiter Copilot
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">Uses OpenRouter when configured, with deterministic scoring as a reliable fallback.</p>
                 </div>
@@ -147,7 +155,30 @@ export default async function CandidateDetailPage({
                     <div className="mt-5">
                       <FitScoreBar score={analysis.fitScore} size="lg" inverted />
                     </div>
-                    <p className="mt-4 text-sm leading-6 text-slate-300">{analysis.summary}</p>
+                    <div className="mt-5 border-t border-white/10 pt-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Executive summary</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{analysis.summary}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-[1fr_0.6fr]">
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                      <h3 className="flex items-center gap-2 font-semibold text-blue-950"><Target className="h-4 w-4" />Role match explanation</h3>
+                      <p className="mt-3 text-sm leading-6 text-blue-900">
+                        {matchedSkills.length
+                          ? `${candidate.name} directly matches ${matchedSkills.join(", ")} for the ${application?.job.title ?? candidate.roleAppliedFor} role.`
+                          : `The profile shows transferable experience, but direct overlap with the role requirements needs validation.`}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(matchedSkills.length ? matchedSkills : candidate.skills.slice(0, 3)).map((skill) => (
+                          <span key={skill} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-blue-800">{skill}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-violet-100 bg-violet-50 p-4">
+                      <h3 className="flex items-center gap-2 font-semibold text-violet-950"><ListChecks className="h-4 w-4" />Suggested next step</h3>
+                      <p className="mt-3 text-xl font-semibold text-violet-950">Move to {formatEnum(analysis.recommendedStage)}</p>
+                      <p className="mt-2 text-sm leading-6 text-violet-900">Use the interview kit below to validate strengths and close the highest-priority gaps.</p>
+                    </div>
                   </div>
                   <div className="mt-6 grid gap-4 md:grid-cols-2">
                     <div className="rounded-lg bg-emerald-50 p-4">
@@ -164,7 +195,7 @@ export default async function CandidateDetailPage({
                     <div className="rounded-lg bg-amber-50 p-4">
                       <h3 className="flex items-center gap-2 font-semibold text-amber-900">
                         <CircleAlert className="h-4 w-4" />
-                        Gaps
+                        Risks and gaps
                       </h3>
                       <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
                         {analysis.gaps.map((item) => (
@@ -175,8 +206,10 @@ export default async function CandidateDetailPage({
                   </div>
                 </div>
               ) : (
-                <div className="mt-6 rounded-lg border border-dashed border-slate-300 p-6 text-sm leading-6 text-slate-600">
-                  Generate analysis to calculate a fit score, strengths, gaps, and tailored interview questions.
+                <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                  <BrainCircuit className="mx-auto h-8 w-8 text-slate-400" />
+                  <h3 className="mt-3 font-semibold text-slate-950">Copilot analysis is ready to run</h3>
+                  <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-600">Generate a role-specific fit score, executive summary, evidence, risks, next step, and structured interview kit.</p>
                 </div>
               )}
             </div>
@@ -190,18 +223,20 @@ export default async function CandidateDetailPage({
             </div>
 
             <div className="surface rounded-lg p-5">
-              <h2 className="text-lg font-semibold text-slate-950">Generated interview questions</h2>
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950"><MessageSquareText className="h-5 w-5 text-blue-700" />Interview kit</h2>
               {kit ? (
-                <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-                  {kit.questions.map((question, index) => (
-                    <li key={question} className="rounded-lg bg-slate-50 p-3">
-                      <span className="font-semibold">{index + 1}. </span>
-                      {question}
-                    </li>
+                <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                  {questionGroups.map((group) => (
+                    <div key={group.title} className={`rounded-lg p-4 ${group.tone}`}>
+                      <h3 className="flex items-center gap-2 text-sm font-semibold"><group.icon className="h-4 w-4" />{group.title}</h3>
+                      <ol className="mt-3 space-y-3 text-sm leading-6">
+                        {group.questions.map((question, index) => <li key={question}><span className="font-semibold">{index + 1}. </span>{question}</li>)}
+                      </ol>
+                    </div>
                   ))}
-                </ol>
+                </div>
               ) : (
-                <p className="mt-3 text-sm text-slate-500">No interview kit generated yet.</p>
+                <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Generate Copilot analysis to create technical, behavioral, and resume-specific questions.</p>
               )}
             </div>
           </div>
