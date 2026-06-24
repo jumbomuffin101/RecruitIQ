@@ -34,9 +34,16 @@ export default async function CandidateDetailPage({
     const application = candidate.applications[0];
     const jobText = `${application?.job.description ?? ""} ${application?.job.requirements ?? ""}`.toLowerCase();
     const matchedSkills = candidate.skills.filter((skill) => jobText.includes(skill.toLowerCase()));
-    const technicalQuestions = kit ? [kit.questions[0], kit.questions[3]].filter(Boolean) : [];
-    const behavioralQuestions = kit ? [kit.questions[2]].filter(Boolean) : [];
-    const resumeSpecificQuestions = kit ? [kit.questions[1], ...kit.questions.slice(4)].filter(Boolean) : [];
+    const technicalQuestions = analysis?.technicalQuestions.length
+      ? analysis.technicalQuestions
+      : kit ? [kit.questions[0], kit.questions[3]].filter(Boolean) : [];
+    const behavioralQuestions = analysis?.behavioralQuestions.length
+      ? analysis.behavioralQuestions
+      : kit ? [kit.questions[2]].filter(Boolean) : [];
+    const resumeSpecificQuestions = analysis?.resumeSpecificQuestions.length
+      ? analysis.resumeSpecificQuestions
+      : kit ? [kit.questions[1], ...kit.questions.slice(4)].filter(Boolean) : [];
+    const analysisSourceLabel = analysis?.source === "openrouter" ? "AI-enhanced" : "Deterministic fallback";
     const questionGroups = [
       { title: "Technical", questions: technicalQuestions, icon: Wrench, tone: "bg-blue-50 text-blue-950" },
       { title: "Behavioral", questions: behavioralQuestions, icon: UsersRound, tone: "bg-emerald-50 text-emerald-950" },
@@ -156,9 +163,14 @@ export default async function CandidateDetailPage({
               {analysis ? (
                 <div className="mt-6">
                   <div className="rounded-lg bg-slate-950 p-5 text-white">
-                    <div className="flex items-end gap-3">
-                      <span className="text-6xl font-semibold tracking-tight">{analysis.fitScore}</span>
-                      <span className="pb-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">Fit score</span>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-end gap-3">
+                        <span className="text-6xl font-semibold tracking-tight">{analysis.fitScore}</span>
+                        <span className="pb-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">Fit score</span>
+                      </div>
+                      <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">
+                        {analysisSourceLabel}
+                      </span>
                     </div>
                     <div className="mt-5">
                       <FitScoreBar score={analysis.fitScore} size="lg" inverted />
@@ -172,7 +184,9 @@ export default async function CandidateDetailPage({
                     <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
                       <h3 className="flex items-center gap-2 font-semibold text-blue-950"><Target className="h-4 w-4" />Role match explanation</h3>
                       <p className="mt-3 text-sm leading-6 text-blue-900">
-                        {matchedSkills.length
+                        {analysis.roleMatch
+                          ? analysis.roleMatch
+                          : matchedSkills.length
                           ? `${candidate.name} directly matches ${matchedSkills.join(", ")} for the ${application?.job.title ?? candidate.roleAppliedFor} role.`
                           : `The profile shows transferable experience, but direct overlap with the role requirements needs validation.`}
                       </p>
@@ -185,7 +199,7 @@ export default async function CandidateDetailPage({
                     <div className="rounded-lg border border-violet-100 bg-violet-50 p-4">
                       <h3 className="flex items-center gap-2 font-semibold text-violet-950"><ListChecks className="h-4 w-4" />Suggested next step</h3>
                       <p className="mt-3 text-xl font-semibold text-violet-950">Move to {formatEnum(analysis.recommendedStage)}</p>
-                      <p className="mt-2 text-sm leading-6 text-violet-900">Use the interview kit below to validate strengths and close the highest-priority gaps.</p>
+                      <p className="mt-2 text-sm leading-6 text-violet-900">{analysis.nextStep || "Use the interview kit below to validate strengths and close the highest-priority gaps."}</p>
                     </div>
                   </div>
                   <div className="mt-6 grid gap-4 md:grid-cols-2">

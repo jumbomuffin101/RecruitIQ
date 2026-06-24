@@ -25,11 +25,11 @@ Small recruiting teams often run hiring from spreadsheets, inboxes, and inconsis
 - Job creation and active hiring portfolio
 - Two-step PDF/TXT resume intake with editable structured field extraction
 - Deterministic extraction for contact details, links, education, recent role, skills, experience, projects, and concise summary
-- Optional OpenRouter enhancement with deterministic fallback
+- Optional OpenRouter enhancement for structured resume summaries with deterministic fallback
 - Manual resume text and manual profile entry when extraction is unavailable
 - Candidate profiles with skills, notes, stage, and resume evidence
-- Recruiter Copilot with fit score, executive summary, role match, strengths, risks, next step, and interview kit
-- Optional OpenRouter analysis with deterministic fallback
+- Recruiter Copilot with deterministic fit score, AI-enhanced executive summary, role match, strengths, risks, next step, and interview kit
+- OpenRouter analysis with deterministic fallback when no key is configured or the provider is unavailable
 - Action Center with prioritized recruiter tasks and recent activity
 - Job-specific ranked candidate comparison
 - Kanban-style pipeline updates
@@ -47,7 +47,7 @@ Recruiter
    -> Amazon Aurora PostgreSQL
 
 Optional server-side analysis:
-Server Action -> OpenRouter API
+Server Action -> OpenRouter API for summaries, strengths/gaps, and interview kits
               -> deterministic fallback when unavailable
 ```
 
@@ -87,14 +87,17 @@ The Prisma schema uses PostgreSQL-native features and remains portable to other 
 ```bash
 DATABASE_URL=""
 OPENROUTER_API_KEY=
-OPENROUTER_MODEL=
-OPENROUTER_BASE_URL=
-NEXT_PUBLIC_APP_URL=
+OPENROUTER_MODEL=openai/gpt-oss-120b:free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_APP_NAME=RecruitIQ
+OPENROUTER_SITE_URL=
 ```
 
 - `DATABASE_URL` is required and should point to Amazon Aurora PostgreSQL in production.
 - `OPENROUTER_API_KEY` is optional and is only read by server-side code.
-- When OpenRouter is missing or unavailable, RecruitIQ uses deterministic candidate analysis.
+- OpenRouter is used server-side to improve candidate summaries, role match explanations, strengths, gaps, next steps, and interview kits.
+- Fit scores remain explainable and deterministic based on skill and requirement matching.
+- When OpenRouter is missing, times out, returns invalid JSON, or is unavailable, RecruitIQ uses deterministic candidate analysis.
 - No resume files are stored or exposed publicly; only extracted text is saved to PostgreSQL.
 
 ## Local Setup
@@ -132,7 +135,7 @@ docker compose up -d postgres
 4. Upload a PDF or TXT resume from `/candidates`, extract structured details, and edit the profile before saving.
 5. Open the saved candidate and review the concise summary, education, experience, projects, and raw resume disclosure.
 6. Generate Recruiter Copilot analysis.
-7. Show the fit score, evidence, risks, suggested next step, and interview kit.
+7. Show the deterministic fit score, AI-enhanced evidence, risks, suggested next step, interview kit, and analysis source badge.
 8. Use `/compare` to rank applicants for a selected job.
 9. Move a candidate in `/pipeline` and finish with `/analytics`.
 10. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.

@@ -192,8 +192,10 @@ async function main() {
       await prisma.resumeAnalysis.create({
         data: {
           candidateId: candidate.id, jobId: input.job.id, fitScore: input.scoreOverride,
-          summary: analysis.summary, strengths: analysis.strengths, gaps: analysis.gaps,
-          recommendedStage: analysis.recommendedStage,
+          summary: analysis.summary, roleMatch: analysis.roleMatch, strengths: analysis.strengths, gaps: analysis.gaps,
+          recommendedStage: analysis.recommendedStage, nextStep: analysis.nextStep,
+          technicalQuestions: analysis.technicalQuestions, behavioralQuestions: analysis.behavioralQuestions,
+          resumeSpecificQuestions: analysis.resumeSpecificQuestions, source: "deterministic",
         },
       });
       await prisma.interviewKit.create({

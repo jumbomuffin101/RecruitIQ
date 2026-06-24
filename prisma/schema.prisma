@@ -130,9 +130,15 @@ model ResumeAnalysis {
   jobId            String?
   fitScore         Int
   summary          String
+  roleMatch        String?
   strengths        String[]
   gaps             String[]
   recommendedStage String
+  nextStep         String?
+  technicalQuestions String[] @default([])
+  behavioralQuestions String[] @default([])
+  resumeSpecificQuestions String[] @default([])
+  source           String    @default("deterministic")
   createdAt        DateTime  @default(now())
 }
 

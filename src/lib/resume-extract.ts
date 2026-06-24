@@ -1,3 +1,5 @@
+import { requestOpenRouterJson } from "@/lib/openrouter";
+
 export type ResumeExtraction = {
   name: string;
   email: string;
@@ -146,49 +148,68 @@ function normalizeExtraction(value: Partial<ResumeExtraction>, fallback: ResumeE
 }
 
 async function extractWithOpenRouter(rawText: string, fallback: ResumeExtraction) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return null;
-  try {
-    const baseUrl = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-OpenRouter-Title": "RecruitIQ" },
-      body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
-        temperature: 0,
-        max_tokens: 1200,
-        messages: [
-          { role: "system", content: "Extract factual candidate data from the resume. Do not invent missing facts. Return only valid JSON." },
-          { role: "user", content: rawText.slice(0, 18000) },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "resume_extraction",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                name: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, location: { type: "string" },
-                linkedinUrl: { type: "string" }, githubUrl: { type: "string" }, educationSummary: { type: "string" },
-                currentTitle: { type: "string" }, currentCompany: { type: "string" }, skills: { type: "array", items: { type: "string" } },
-                experienceSummary: { type: "string" }, projectsSummary: { type: "string" }, resumeSummary: { type: "string" },
-                yearsExperience: { type: ["number", "null"] },
-              },
-              required: ["name", "email", "phone", "location", "linkedinUrl", "githubUrl", "educationSummary", "currentTitle", "currentCompany", "skills", "experienceSummary", "projectsSummary", "resumeSummary", "yearsExperience"],
-            },
-          },
-        },
-      }),
-    });
-    if (!response.ok) return null;
-    const payload = await response.json() as { choices?: { message?: { content?: string } }[] };
-    const content = payload.choices?.[0]?.message?.content;
-    return content ? normalizeExtraction(JSON.parse(content) as ResumeExtraction, fallback) : null;
-  } catch {
-    return null;
-  }
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      name: { type: "string" },
+      email: { type: "string" },
+      phone: { type: "string" },
+      location: { type: "string" },
+      linkedinUrl: { type: "string" },
+      githubUrl: { type: "string" },
+      educationSummary: { type: "string" },
+      currentTitle: { type: "string" },
+      currentCompany: { type: "string" },
+      skills: { type: "array", items: { type: "string" } },
+      experienceSummary: { type: "string" },
+      projectsSummary: { type: "string" },
+      resumeSummary: { type: "string" },
+      yearsExperience: { type: ["number", "null"] },
+    },
+    required: [
+      "name",
+      "email",
+      "phone",
+      "location",
+      "linkedinUrl",
+      "githubUrl",
+      "educationSummary",
+      "currentTitle",
+      "currentCompany",
+      "skills",
+      "experienceSummary",
+      "projectsSummary",
+      "resumeSummary",
+      "yearsExperience",
+    ],
+  };
+
+  const parsed = await requestOpenRouterJson<ResumeExtraction>({
+    context: "resume extraction",
+    schemaName: "resume_extraction",
+    schema,
+    temperature: 0,
+    maxTokens: 1200,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Extract factual candidate data from the resume. Return strict JSON only. Do not invent missing facts. Summaries must be concise and professional, not raw resume dumps.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          deterministicFallback: fallback,
+          resumeTextExcerpt: rawText.slice(0, 18_000),
+          fieldsToImprove:
+            "Improve resumeSummary, educationSummary, experienceSummary, projectsSummary, currentTitle, currentCompany, and skills when the resume supports it. Preserve contact fields from the resume.",
+        }),
+      },
+    ],
+  });
+
+  return parsed ? normalizeExtraction(parsed, fallback) : null;
 }
 
 export async function extractResumeWithFallback(rawText: string) {
