@@ -34,13 +34,13 @@ export default async function CandidateDetailPage({
     const application = candidate.applications[0];
     const jobText = `${application?.job.description ?? ""} ${application?.job.requirements ?? ""}`.toLowerCase();
     const matchedSkills = candidate.skills.filter((skill) => jobText.includes(skill.toLowerCase()));
-    const technicalQuestions = analysis?.technicalQuestions.length
+    const technicalQuestions = analysis?.technicalQuestions?.length
       ? analysis.technicalQuestions
       : kit ? [kit.questions[0], kit.questions[3]].filter(Boolean) : [];
-    const behavioralQuestions = analysis?.behavioralQuestions.length
+    const behavioralQuestions = analysis?.behavioralQuestions?.length
       ? analysis.behavioralQuestions
       : kit ? [kit.questions[2]].filter(Boolean) : [];
-    const resumeSpecificQuestions = analysis?.resumeSpecificQuestions.length
+    const resumeSpecificQuestions = analysis?.resumeSpecificQuestions?.length
       ? analysis.resumeSpecificQuestions
       : kit ? [kit.questions[1], ...kit.questions.slice(4)].filter(Boolean) : [];
     const analysisSourceLabel = analysis?.source === "openrouter" ? "AI-enhanced" : "Deterministic fallback";
