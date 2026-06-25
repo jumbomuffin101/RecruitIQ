@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/prisma";
 import { analyzeCandidateForJob } from "@/lib/ai";
+import { getCandidateRecommendation } from "@/lib/recommendations";
 
 export async function getWorkspaceOrganization() {
   const prisma = getPrisma();
@@ -147,26 +148,6 @@ export async function getAnalyticsData() {
   };
 }
 
-function recommendedNextAction(score: number, status: string) {
-  if (status === "REJECTED") {
-    return "Keep archived unless a better-fit role opens.";
-  }
-
-  if (score >= 85) {
-    return "Prioritize for founder or hiring-manager interview.";
-  }
-
-  if (score >= 72) {
-    return "Schedule a structured skills interview.";
-  }
-
-  if (score >= 58) {
-    return "Run a focused screen on the listed gaps.";
-  }
-
-  return "Hold for now or redirect to a stronger matching role.";
-}
-
 export async function getCompareData(jobId?: string) {
   const jobs = await getJobs();
   const selectedJob = jobs.find((job) => job.id === jobId) ?? jobs.find((job) => job.status === "OPEN") ?? jobs[0];
@@ -202,6 +183,10 @@ export async function getCompareData(jobId?: string) {
           }
         : analyzeCandidateForJob(candidate, selectedJob);
       const fitScore = savedApplication?.fitScore ?? analysis.fitScore;
+      const recommendation = getCandidateRecommendation({
+        fitScore,
+        currentStatus: candidate.status,
+      });
       const jobText = `${selectedJob.title} ${selectedJob.description} ${selectedJob.requirements}`.toLowerCase();
       const matchingSkills = candidate.skills.filter((skill) => jobText.includes(skill.toLowerCase()));
 
@@ -215,8 +200,10 @@ export async function getCompareData(jobId?: string) {
         fitScore,
         strengths: analysis.strengths,
         gaps: analysis.gaps,
-        recommendedStage: analysis.recommendedStage,
-        recommendedNextAction: recommendedNextAction(fitScore, candidate.status),
+        recommendedStage: recommendation.recommendedStage,
+        recommendedNextAction: recommendation.nextStep,
+        recommendationDescription: recommendation.description,
+        recommendationTone: recommendation.tone,
       };
     })
     .sort((a, b) => b.fitScore - a.fitScore);

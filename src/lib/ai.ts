@@ -1,4 +1,5 @@
 import { requestOpenRouterJson } from "@/lib/openrouter";
+import { getCandidateRecommendation } from "@/lib/recommendations";
 import { clamp } from "@/lib/utils";
 
 type CandidateLike = {
@@ -11,6 +12,7 @@ type CandidateLike = {
   currentTitle?: string | null;
   currentCompany?: string | null;
   projectsSummary?: string | null;
+  status?: string | null;
 };
 
 type JobLike = {
@@ -99,14 +101,6 @@ const importantSkills = [
   "api",
 ];
 
-const stageMap = {
-  Applied: "APPLIED",
-  Screened: "SCREENED",
-  Interview: "INTERVIEW",
-  Offer: "OFFER",
-  Rejected: "REJECTED",
-} as const;
-
 function normalize(text: string) {
   return text.toLowerCase().replace(/[^a-z0-9.+#\s-]/g, " ");
 }
@@ -175,16 +169,11 @@ export function analyzeCandidateForJob(
     clamp(42 + matchRatio * 45 + directSkillBonus + resumeDepthBonus - missingPenalty, 18, 96),
   );
 
-  const recommendedStage =
-    fitScore >= 88
-      ? "OFFER"
-      : fitScore >= 74
-        ? "INTERVIEW"
-        : fitScore >= 58
-          ? "SCREENED"
-          : fitScore >= 40
-            ? "APPLIED"
-            : "REJECTED";
+  const recommendation = getCandidateRecommendation({
+    fitScore,
+    currentStatus: candidate.status,
+  });
+  const recommendedStage = recommendation.recommendedStage;
 
   const primaryMatches = matchedSignals.slice(0, 4);
   const strengths = [
@@ -221,20 +210,14 @@ export function analyzeCandidateForJob(
 
   return {
     fitScore,
-    summary: `${candidate.name} appears to be a ${fitScore >= 74 ? "strong" : fitScore >= 58 ? "moderate" : "developing"} fit for ${job.title}. The score is based on matched requirements, direct skill overlap, resume depth, and unresolved requirement gaps.`,
+    summary: `${candidate.name} appears to be a ${fitScore >= 85 ? "strong" : fitScore >= 70 ? "moderate" : fitScore >= 50 ? "review-needed" : "low"} fit for ${job.title}. The score is based on matched requirements, direct skill overlap, resume depth, and unresolved requirement gaps.`,
     roleMatch: primaryMatches.length
       ? `${candidate.name} matches ${primaryMatches.join(", ")} against the ${job.title} requirements.`
       : `${candidate.name} may have transferable experience, but direct requirement overlap needs validation.`,
     strengths,
     gaps,
     recommendedStage,
-    nextStep: recommendedStage === "REJECTED"
-      ? "Hold for now unless a better-fit role opens."
-      : recommendedStage === "OFFER"
-        ? "Prioritize final hiring-manager calibration and references."
-        : recommendedStage === "INTERVIEW"
-          ? "Schedule a structured interview focused on the strongest matched skills and unresolved gaps."
-          : "Run a focused recruiter screen before advancing.",
+    nextStep: recommendation.nextStep,
     technicalQuestions,
     behavioralQuestions,
     resumeSpecificQuestions,
@@ -246,9 +229,6 @@ function normalizeAnalysis(
   value: Partial<OpenRouterAnalysisResult>,
   deterministic: CandidateAnalysisResult,
 ): CandidateAnalysisResult {
-  const recommendedStage = value.recommendedStage && value.recommendedStage in stageMap
-    ? stageMap[value.recommendedStage]
-    : deterministic.recommendedStage;
   const technicalQuestions = cleanList(value.technicalQuestions, deterministic.technicalQuestions, 4);
   const behavioralQuestions = cleanList(value.behavioralQuestions, deterministic.behavioralQuestions, 4);
   const resumeSpecificQuestions = cleanList(value.resumeSpecificQuestions, deterministic.resumeSpecificQuestions, 4);
@@ -259,8 +239,8 @@ function normalizeAnalysis(
     roleMatch: cleanText(value.roleMatch, deterministic.roleMatch),
     strengths: cleanList(value.strengths, deterministic.strengths, 5),
     gaps: cleanList(value.gaps, deterministic.gaps, 5),
-    recommendedStage,
-    nextStep: cleanText(value.nextStep, deterministic.nextStep, 500),
+    recommendedStage: deterministic.recommendedStage,
+    nextStep: deterministic.nextStep,
     technicalQuestions,
     behavioralQuestions,
     resumeSpecificQuestions,

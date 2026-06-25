@@ -10,6 +10,27 @@ import { getCompareData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
+const recommendationCardStyles = {
+  advance: "bg-blue-50 text-blue-950",
+  review: "bg-amber-50 text-amber-950",
+  reject: "bg-red-50 text-red-950",
+  neutral: "bg-slate-50 text-slate-950",
+};
+
+const recommendationTextStyles = {
+  advance: "text-blue-900",
+  review: "text-amber-900",
+  reject: "text-red-900",
+  neutral: "text-slate-700",
+};
+
+const recommendationIconStyles = {
+  advance: "text-blue-700",
+  review: "text-amber-700",
+  reject: "text-red-700",
+  neutral: "text-slate-600",
+};
+
 export default async function ComparePage({
   searchParams,
 }: {
@@ -100,18 +121,19 @@ export default async function ComparePage({
                   </ul>
                 </div>
 
-                <div className="rounded-lg bg-amber-50 p-4">
-                  <h3 className="text-sm font-semibold text-amber-950">Gaps and next action</h3>
-                  <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
+                <div className={`rounded-lg p-4 ${recommendationCardStyles[candidate.recommendationTone]}`}>
+                  <h3 className="text-sm font-semibold">Gaps and next action</h3>
+                  <ul className={`mt-3 space-y-2 text-sm leading-6 ${recommendationTextStyles[candidate.recommendationTone]}`}>
                     {candidate.gaps.slice(0, 2).map((gap) => (
                       <li key={gap}>{gap}</li>
                     ))}
                   </ul>
                   <div className="mt-4 rounded-lg bg-white/70 p-3">
                     <p className="flex items-start gap-2 text-sm font-semibold leading-6 text-slate-900">
-                      <BrainCircuit className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
+                      <BrainCircuit className={`mt-0.5 h-4 w-4 shrink-0 ${recommendationIconStyles[candidate.recommendationTone]}`} />
                       {candidate.recommendedNextAction}
                     </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{candidate.recommendationDescription}</p>
                   </div>
                 </div>
               </div>

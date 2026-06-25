@@ -10,10 +10,24 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatEnum } from "@/lib/utils";
 import { getCandidateDetail } from "@/lib/data";
+import { getCandidateRecommendation } from "@/lib/recommendations";
 
 export const dynamic = "force-dynamic";
 
 const statuses = ["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"];
+const recommendationToneStyles = {
+  advance: "border-blue-100 bg-blue-50 text-blue-950",
+  review: "border-amber-100 bg-amber-50 text-amber-950",
+  reject: "border-red-100 bg-red-50 text-red-950",
+  neutral: "border-slate-200 bg-slate-50 text-slate-950",
+};
+
+const recommendationBodyStyles = {
+  advance: "text-blue-900",
+  review: "text-amber-900",
+  reject: "text-red-900",
+  neutral: "text-slate-700",
+};
 
 export default async function CandidateDetailPage({
   params,
@@ -44,6 +58,12 @@ export default async function CandidateDetailPage({
       ? analysis.resumeSpecificQuestions
       : kit ? [kit.questions[1], ...kit.questions.slice(4)].filter(Boolean) : [];
     const analysisSourceLabel = analysis?.source === "openrouter" ? "AI-enhanced" : "Deterministic fallback";
+    const recommendation = analysis
+      ? getCandidateRecommendation({
+          fitScore: analysis.fitScore,
+          currentStatus: candidate.status,
+        })
+      : null;
     const questionGroups = [
       { title: "Technical", questions: technicalQuestions, icon: Wrench, tone: "bg-blue-50 text-blue-950" },
       { title: "Behavioral", questions: behavioralQuestions, icon: UsersRound, tone: "bg-emerald-50 text-emerald-950" },
@@ -196,10 +216,17 @@ export default async function CandidateDetailPage({
                         ))}
                       </div>
                     </div>
-                    <div className="rounded-lg border border-violet-100 bg-violet-50 p-4">
-                      <h3 className="flex items-center gap-2 font-semibold text-violet-950"><ListChecks className="h-4 w-4" />Suggested next step</h3>
-                      <p className="mt-3 text-xl font-semibold text-violet-950">Move to {formatEnum(analysis.recommendedStage)}</p>
-                      <p className="mt-2 text-sm leading-6 text-violet-900">{analysis.nextStep || "Use the interview kit below to validate strengths and close the highest-priority gaps."}</p>
+                    <div className={`rounded-lg border p-4 ${recommendationToneStyles[recommendation?.tone ?? "neutral"]}`}>
+                      <h3 className="flex items-center gap-2 font-semibold"><ListChecks className="h-4 w-4" />Suggested next step</h3>
+                      <p className="mt-3 text-xl font-semibold">{recommendation?.nextStep ?? analysis.nextStep}</p>
+                      {recommendation ? (
+                        <p className={`mt-1 text-xs font-semibold uppercase tracking-[0.16em] ${recommendationBodyStyles[recommendation.tone]}`}>
+                          Recommended stage: {formatEnum(recommendation.recommendedStage)}
+                        </p>
+                      ) : null}
+                      <p className={`mt-2 text-sm leading-6 ${recommendationBodyStyles[recommendation?.tone ?? "neutral"]}`}>
+                        {recommendation?.description || analysis.nextStep || "Use the interview kit below to validate strengths and close the highest-priority gaps."}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-6 grid gap-4 md:grid-cols-2">
