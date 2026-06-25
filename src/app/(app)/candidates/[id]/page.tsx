@@ -7,27 +7,48 @@ import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { FitScoreBar } from "@/components/FitScoreBar";
 import { GenerateAnalysisButton } from "@/components/GenerateAnalysisButton";
 import { PageHeader } from "@/components/PageHeader";
-import { StatusBadge } from "@/components/StatusBadge";
 import { formatEnum } from "@/lib/utils";
 import { getCandidateDetail } from "@/lib/data";
-import { getCandidateRecommendation } from "@/lib/recommendations";
+import { type CandidateStage, getCandidateRecommendation } from "@/lib/recommendations";
 
 export const dynamic = "force-dynamic";
 
 const statuses = ["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"];
-const recommendationToneStyles = {
-  advance: "border-blue-100 bg-blue-50 text-blue-950",
-  review: "border-amber-100 bg-amber-50 text-amber-950",
-  reject: "border-red-100 bg-red-50 text-red-950",
-  neutral: "border-slate-200 bg-slate-50 text-slate-950",
+const recommendationStageStyles = {
+  REJECTED: {
+    card: "border-red-100 bg-red-50 text-red-950",
+    body: "text-red-900",
+    icon: "text-red-700",
+  },
+  INTERVIEW: {
+    card: "border-emerald-100 bg-emerald-50 text-emerald-950",
+    body: "text-emerald-900",
+    icon: "text-emerald-700",
+  },
+  OFFER: {
+    card: "border-emerald-100 bg-emerald-50 text-emerald-950",
+    body: "text-emerald-900",
+    icon: "text-emerald-700",
+  },
+  SCREENED: {
+    card: "border-blue-100 bg-blue-50 text-blue-950",
+    body: "text-blue-900",
+    icon: "text-blue-700",
+  },
+  APPLIED: {
+    card: "border-amber-100 bg-amber-50 text-amber-950",
+    body: "text-amber-900",
+    icon: "text-amber-700",
+  },
 };
 
-const recommendationBodyStyles = {
-  advance: "text-blue-900",
-  review: "text-amber-900",
-  reject: "text-red-900",
-  neutral: "text-slate-700",
-};
+function getRecommendationActionLabel(stage: CandidateStage, currentStatus: CandidateStage) {
+  if (stage === "REJECTED") return currentStatus === "REJECTED" ? "No further action" : "Reject candidate";
+  if (stage === "INTERVIEW") return "Advance to Interview";
+  if (stage === "OFFER") return "Move to Offer";
+  if (stage === "SCREENED") return "Move to Screened";
+  return "Keep under review";
+}
 
 export default async function CandidateDetailPage({
   params,
@@ -64,6 +85,9 @@ export default async function CandidateDetailPage({
           currentStatus: candidate.status,
         })
       : null;
+    const recommendationStage: CandidateStage = recommendation?.recommendedStage ?? "APPLIED";
+    const recommendationStyles = recommendationStageStyles[recommendationStage];
+    const recommendationActionLabel = getRecommendationActionLabel(recommendationStage, candidate.status as CandidateStage);
     const questionGroups = [
       { title: "Technical", questions: technicalQuestions, icon: Wrench, tone: "bg-blue-50 text-blue-950" },
       { title: "Behavioral", questions: behavioralQuestions, icon: UsersRound, tone: "bg-emerald-50 text-emerald-950" },
@@ -100,7 +124,6 @@ export default async function CandidateDetailPage({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <StatusBadge status={candidate.status} />
               <form action={generateCandidateAnalysis}>
                 <input type="hidden" name="candidateId" value={candidate.id} />
                 <GenerateAnalysisButton hasAnalysis={Boolean(analysis)} />
@@ -216,15 +239,15 @@ export default async function CandidateDetailPage({
                         ))}
                       </div>
                     </div>
-                    <div className={`rounded-lg border p-4 ${recommendationToneStyles[recommendation?.tone ?? "neutral"]}`}>
-                      <h3 className="flex items-center gap-2 font-semibold"><ListChecks className="h-4 w-4" />Suggested next step</h3>
-                      <p className="mt-3 text-xl font-semibold">{recommendation?.nextStep ?? analysis.nextStep}</p>
+                    <div className={`rounded-lg border p-4 ${recommendationStyles.card}`}>
+                      <h3 className="flex items-center gap-2 font-semibold"><ListChecks className={`h-4 w-4 ${recommendationStyles.icon}`} />Suggested next step</h3>
+                      <p className="mt-3 text-xl font-semibold">{recommendationActionLabel}</p>
                       {recommendation ? (
-                        <p className={`mt-1 text-xs font-semibold uppercase tracking-[0.16em] ${recommendationBodyStyles[recommendation.tone]}`}>
+                        <p className={`mt-1 text-xs font-semibold uppercase tracking-[0.16em] ${recommendationStyles.body}`}>
                           Recommended stage: {formatEnum(recommendation.recommendedStage)}
                         </p>
                       ) : null}
-                      <p className={`mt-2 text-sm leading-6 ${recommendationBodyStyles[recommendation?.tone ?? "neutral"]}`}>
+                      <p className={`mt-2 text-sm leading-6 ${recommendationStyles.body}`}>
                         {recommendation?.description || analysis.nextStep || "Use the interview kit below to validate strengths and close the highest-priority gaps."}
                       </p>
                     </div>
