@@ -11,6 +11,7 @@ type OpenRouterJsonRequest = {
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;
+  timeoutMs?: number;
 };
 
 type ChatCompletionPayload = {
@@ -127,6 +128,7 @@ export async function callOpenRouterJson<T>({
   maxTokens = 1200,
   temperature = 0.2,
   systemPrompt = "You are a recruiting analyst. Return strict JSON only.",
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 }: OpenRouterJsonRequest) {
   const config = getOpenRouterConfig();
 
@@ -137,11 +139,17 @@ export async function callOpenRouterJson<T>({
     return null;
   }
 
+  const userPrompt = buildUserPrompt({ prompt, schema, input });
+  const promptCharacterLength = systemPrompt.length + userPrompt.length;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   const messages: OpenRouterMessage[] = [
     { role: "system", content: systemPrompt },
-    { role: "user", content: buildUserPrompt({ prompt, schema, input }) },
+    { role: "user", content: userPrompt },
   ];
 
   try {
@@ -175,6 +183,12 @@ export async function callOpenRouterJson<T>({
     return parsed;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
+    if (timedOut || (error instanceof Error && error.name === "AbortError")) {
+      console.warn(
+        `[OpenRouter] timed out after ${timeoutMs} ms; model=${config.model}; promptCharacters=${promptCharacterLength}`,
+      );
+      return null;
+    }
     console.warn(`[OpenRouter] ${context} failed: ${message}`);
     return null;
   } finally {

@@ -125,6 +125,10 @@ function cleanList(value: unknown, fallback: string[], maxItems: number) {
   return (items.length ? items : fallback).slice(0, maxItems);
 }
 
+function truncateText(value: string | null | undefined, maxLength: number) {
+  return (value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
 function extractJobSignals(job: JobLike) {
   const text = normalize(`${job.title} ${job.description} ${job.requirements}`);
   const explicitSkills = importantSkills.filter((skill) => includesSkill(text, skill));
@@ -286,8 +290,9 @@ async function analyzeWithOpenRouter(
   const parsed = await callOpenRouterJson<OpenRouterAnalysisResult>({
     context: "candidate analysis",
     schema,
-    temperature: 0.15,
-    maxTokens: 1300,
+    temperature: 0.2,
+    maxTokens: 1500,
+    timeoutMs: 55_000,
     systemPrompt:
       "You are RecruitIQ, a careful AI recruiting copilot. Return strict JSON only. Be concise, recruiter-friendly, and evidence-based. Do not invent employers, degrees, dates, or credentials.",
     prompt:
@@ -300,14 +305,18 @@ async function analyzeWithOpenRouter(
         name: candidate.name,
         currentTitle: candidate.currentTitle,
         currentCompany: candidate.currentCompany,
-        skills: candidate.skills,
-        resumeSummary: candidate.resumeSummary,
-        experienceSummary: candidate.experienceSummary,
-        educationSummary: candidate.educationSummary,
-        projectsSummary: candidate.projectsSummary,
-        resumeTextExcerpt: candidate.resumeText.slice(0, 8000),
+        skills: candidate.skills.slice(0, 24),
+        resumeSummary: truncateText(candidate.resumeSummary, 900),
+        experienceSummary: truncateText(candidate.experienceSummary, 1200),
+        educationSummary: truncateText(candidate.educationSummary, 600),
+        projectsSummary: truncateText(candidate.projectsSummary, 800),
+        resumeTextExcerpt: truncateText(candidate.resumeText, 7000),
       },
-      job,
+      job: {
+        title: job.title,
+        description: truncateText(job.description, 2000),
+        requirements: truncateText(job.requirements, 2000),
+      },
     },
   });
 
