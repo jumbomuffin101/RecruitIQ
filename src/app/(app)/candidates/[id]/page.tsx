@@ -57,7 +57,7 @@ export default async function CandidateDetailPage({
     const resumeSpecificQuestions = analysis?.resumeSpecificQuestions?.length
       ? analysis.resumeSpecificQuestions
       : kit ? [kit.questions[1], ...kit.questions.slice(4)].filter(Boolean) : [];
-    const analysisSourceLabel = analysis?.source === "openrouter" ? "AI-enhanced" : "Deterministic fallback";
+    const analysisSourceLabel = analysis?.source === "openrouter" ? "AI-enhanced via OpenRouter" : "Deterministic fallback";
     const recommendation = analysis
       ? getCandidateRecommendation({
           fitScore: analysis.fitScore,

@@ -1,4 +1,4 @@
-import { requestOpenRouterJson } from "@/lib/openrouter";
+import { callOpenRouterJson } from "@/lib/openrouter";
 
 export type ResumeExtraction = {
   name: string;
@@ -185,28 +185,19 @@ async function extractWithOpenRouter(rawText: string, fallback: ResumeExtraction
     ],
   };
 
-  const parsed = await requestOpenRouterJson<ResumeExtraction>({
+  const parsed = await callOpenRouterJson<ResumeExtraction>({
     context: "resume extraction",
-    schemaName: "resume_extraction",
     schema,
     temperature: 0,
     maxTokens: 1200,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Extract factual candidate data from the resume. Return strict JSON only. Do not invent missing facts. Summaries must be concise and professional, not raw resume dumps.",
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          deterministicFallback: fallback,
-          resumeTextExcerpt: rawText.slice(0, 18_000),
-          fieldsToImprove:
-            "Improve resumeSummary, educationSummary, experienceSummary, projectsSummary, currentTitle, currentCompany, and skills when the resume supports it. Preserve contact fields from the resume.",
-        }),
-      },
-    ],
+    systemPrompt:
+      "Extract factual candidate data from the resume. Return strict JSON only. Do not invent missing facts. Summaries must be concise and professional, not raw resume dumps.",
+    prompt:
+      "Improve structured resume extraction. Improve resumeSummary, educationSummary, experienceSummary, projectsSummary, currentTitle, currentCompany, and skills only when the resume supports it. Preserve contact fields from the resume.",
+    input: {
+      deterministicFallback: fallback,
+      resumeTextExcerpt: rawText.slice(0, 18_000),
+    },
   });
 
   return parsed ? normalizeExtraction(parsed, fallback) : null;

@@ -1,4 +1,4 @@
-import { requestOpenRouterJson } from "@/lib/openrouter";
+import { callOpenRouterJson } from "@/lib/openrouter";
 import { getCandidateRecommendation } from "@/lib/recommendations";
 import { clamp } from "@/lib/utils";
 
@@ -283,40 +283,32 @@ async function analyzeWithOpenRouter(
     ],
   };
 
-  const parsed = await requestOpenRouterJson<OpenRouterAnalysisResult>({
+  const parsed = await callOpenRouterJson<OpenRouterAnalysisResult>({
     context: "candidate analysis",
-    schemaName: "candidate_analysis",
     schema,
     temperature: 0.15,
     maxTokens: 1300,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are RecruitIQ, a careful AI recruiting copilot. Return strict JSON only. Be concise, recruiter-friendly, and evidence-based. Do not invent employers, degrees, dates, or credentials.",
+    systemPrompt:
+      "You are RecruitIQ, a careful AI recruiting copilot. Return strict JSON only. Be concise, recruiter-friendly, and evidence-based. Do not invent employers, degrees, dates, or credentials.",
+    prompt:
+      "Create an executive candidate summary, role match explanation, strengths, risks or gaps, suggested next step, and interview kit. Explain the deterministic score; do not create a new score or override the deterministic recommendation.",
+    input: {
+      deterministicFitScore: deterministic.fitScore,
+      deterministicRecommendedStage: deterministic.recommendedStage,
+      deterministicNextStep: deterministic.nextStep,
+      candidate: {
+        name: candidate.name,
+        currentTitle: candidate.currentTitle,
+        currentCompany: candidate.currentCompany,
+        skills: candidate.skills,
+        resumeSummary: candidate.resumeSummary,
+        experienceSummary: candidate.experienceSummary,
+        educationSummary: candidate.educationSummary,
+        projectsSummary: candidate.projectsSummary,
+        resumeTextExcerpt: candidate.resumeText.slice(0, 8000),
       },
-      {
-        role: "user",
-        content: JSON.stringify({
-          deterministicFitScore: deterministic.fitScore,
-          deterministicRecommendedStage: deterministic.recommendedStage,
-          candidate: {
-            name: candidate.name,
-            currentTitle: candidate.currentTitle,
-            currentCompany: candidate.currentCompany,
-            skills: candidate.skills,
-            resumeSummary: candidate.resumeSummary,
-            experienceSummary: candidate.experienceSummary,
-            educationSummary: candidate.educationSummary,
-            projectsSummary: candidate.projectsSummary,
-            resumeTextExcerpt: candidate.resumeText.slice(0, 8000),
-          },
-          job,
-          instructions:
-            "Create an executive candidate summary, role match explanation, strengths, risks or gaps, suggested next step, and interview kit. Explain the deterministic score; do not create a new score.",
-        }),
-      },
-    ],
+      job,
+    },
   });
 
   return parsed ? normalizeAnalysis(parsed, deterministic) : null;

@@ -4,12 +4,13 @@ type OpenRouterMessage = {
 };
 
 type OpenRouterJsonRequest = {
-  messages: OpenRouterMessage[];
-  schemaName: string;
+  context: string;
+  prompt: string;
   schema: Record<string, unknown>;
+  input: Record<string, unknown>;
   maxTokens?: number;
   temperature?: number;
-  context: string;
+  systemPrompt?: string;
 };
 
 type ChatCompletionPayload = {
@@ -24,27 +25,34 @@ const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
 const DEFAULT_TIMEOUT_MS = 18_000;
 
-export function hasOpenRouterConfig() {
-  return Boolean(process.env.OPENROUTER_API_KEY);
-}
-
 function getOpenRouterConfig() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-
-  if (!apiKey) {
-    return null;
-  }
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
 
   return {
     apiKey,
-    model: process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
-    baseUrl: (process.env.OPENROUTER_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, ""),
-    appName: process.env.OPENROUTER_APP_NAME || "",
-    siteUrl: process.env.OPENROUTER_SITE_URL || "",
+    model: process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL,
+    baseUrl: (process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/$/, ""),
+    appName: process.env.OPENROUTER_APP_NAME?.trim() || "",
+    siteUrl: process.env.OPENROUTER_SITE_URL?.trim() || "",
   };
 }
 
-function buildHeaders(config: NonNullable<ReturnType<typeof getOpenRouterConfig>>) {
+export function hasOpenRouterConfig() {
+  return Boolean(getOpenRouterConfig().apiKey);
+}
+
+export function getOpenRouterStatus() {
+  const config = getOpenRouterConfig();
+
+  return {
+    openRouterConfigured: Boolean(config.apiKey),
+    model: config.model,
+    baseUrlConfigured: Boolean(process.env.OPENROUTER_BASE_URL?.trim()),
+    siteUrlConfigured: Boolean(config.siteUrl),
+  };
+}
+
+function buildHeaders(config: ReturnType<typeof getOpenRouterConfig>) {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${config.apiKey}`,
     "Content-Type": "application/json",
@@ -94,22 +102,47 @@ export function parseOpenRouterJson<T>(content: string | Record<string, unknown>
   }
 }
 
-export async function requestOpenRouterJson<T>({
-  messages,
-  schemaName,
+function buildUserPrompt({
+  prompt,
   schema,
+  input,
+}: Pick<OpenRouterJsonRequest, "prompt" | "schema" | "input">) {
+  return [
+    prompt,
+    "",
+    "Return strict JSON only. Do not include markdown, commentary, or code fences.",
+    "JSON schema:",
+    JSON.stringify(schema),
+    "",
+    "Input:",
+    JSON.stringify(input),
+  ].join("\n");
+}
+
+export async function callOpenRouterJson<T>({
+  context,
+  prompt,
+  schema,
+  input,
   maxTokens = 1200,
   temperature = 0.2,
-  context,
+  systemPrompt = "You are a recruiting analyst. Return strict JSON only.",
 }: OpenRouterJsonRequest) {
   const config = getOpenRouterConfig();
 
-  if (!config) {
+  console.info(`[OpenRouter] configured: ${Boolean(config.apiKey)}`);
+  console.info(`[OpenRouter] model: ${config.model}`);
+
+  if (!config.apiKey) {
     return null;
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const messages: OpenRouterMessage[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: buildUserPrompt({ prompt, schema, input }) },
+  ];
 
   try {
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -118,22 +151,14 @@ export async function requestOpenRouterJson<T>({
       signal: controller.signal,
       body: JSON.stringify({
         model: config.model,
+        messages,
         temperature,
         max_tokens: maxTokens,
-        messages,
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: schemaName,
-            strict: true,
-            schema,
-          },
-        },
       }),
     });
 
     if (!response.ok) {
-      console.warn(`[OpenRouter] ${context} failed with status ${response.status}.`);
+      console.warn(`[OpenRouter] ${context} failed: status ${response.status} ${response.statusText}`);
       return null;
     }
 
@@ -142,14 +167,15 @@ export async function requestOpenRouterJson<T>({
     const parsed = parseOpenRouterJson<T>(content);
 
     if (!parsed) {
-      console.warn(`[OpenRouter] ${context} returned invalid JSON.`);
+      console.warn(`[OpenRouter] ${context} failed: invalid JSON response`);
       return null;
     }
 
+    console.info(`[OpenRouter] ${context} succeeded`);
     return parsed;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    console.warn(`[OpenRouter] ${context} request failed: ${message}`);
+    console.warn(`[OpenRouter] ${context} failed: ${message}`);
     return null;
   } finally {
     clearTimeout(timeout);
