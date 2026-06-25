@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
+import { deleteJob } from "@/app/actions";
+import { DeleteConfirmationButton } from "@/components/DeleteConfirmationButton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatEnum } from "@/lib/utils";
 
@@ -35,12 +37,22 @@ export function JobCard({ job }: JobCardProps) {
         <span>{formatEnum(job.type)}</span>
         <span>{job.applications?.length ?? 0} applicants</span>
       </div>
-      <Link
-        href="/candidates"
-        className="mt-5 inline-flex rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-      >
-        View candidates
-      </Link>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Link
+          href={`/jobs/${job.id}`}
+          className="inline-flex rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+        >
+          View job
+        </Link>
+        <DeleteConfirmationButton
+          action={deleteJob}
+          hiddenFields={{ jobId: job.id }}
+          buttonLabel="Delete Job"
+          title="Delete job"
+          description="Are you sure you want to delete this job? This action cannot be undone."
+          confirmLabel="Delete Job"
+        />
+      </div>
     </div>
   );
 }

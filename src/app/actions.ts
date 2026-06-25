@@ -174,6 +174,59 @@ export async function updateCandidateStatus(formData: FormData) {
   revalidatePath(`/candidates/${candidateId}`);
 }
 
+export async function deleteCandidate(formData: FormData) {
+  const prisma = getPrisma();
+  const candidateId = requiredString(formData, "candidateId");
+  const org = await getWorkspaceOrganization();
+
+  const candidate = await prisma.candidate.findFirst({
+    where: { id: candidateId, organizationId: org.id },
+    select: { id: true },
+  });
+
+  if (!candidate) {
+    throw new Error("Candidate not found");
+  }
+
+  await prisma.candidate.delete({ where: { id: candidate.id } });
+
+  revalidatePath("/candidates");
+  revalidatePath("/dashboard");
+  revalidatePath("/pipeline");
+  revalidatePath("/analytics");
+  revalidatePath("/compare");
+  redirect("/candidates?deleted=candidate");
+}
+
+export async function deleteJob(formData: FormData) {
+  const prisma = getPrisma();
+  const jobId = requiredString(formData, "jobId");
+  const org = await getWorkspaceOrganization();
+
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, organizationId: org.id },
+    select: { id: true },
+  });
+
+  if (!job) {
+    throw new Error("Job not found");
+  }
+
+  await prisma.$transaction([
+    prisma.resumeAnalysis.deleteMany({ where: { jobId: job.id } }),
+    prisma.interviewKit.deleteMany({ where: { jobId: job.id } }),
+    prisma.application.deleteMany({ where: { jobId: job.id } }),
+    prisma.job.delete({ where: { id: job.id } }),
+  ]);
+
+  revalidatePath("/jobs");
+  revalidatePath("/dashboard");
+  revalidatePath("/pipeline");
+  revalidatePath("/analytics");
+  revalidatePath("/compare");
+  redirect("/jobs?deleted=job");
+}
+
 export async function generateCandidateAnalysis(formData: FormData) {
   const prisma = getPrisma();
   const candidateId = requiredString(formData, "candidateId");

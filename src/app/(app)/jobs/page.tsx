@@ -9,8 +9,13 @@ import { getJobs } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-export default async function JobsPage() {
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string }>;
+}) {
   try {
+    const { deleted } = await searchParams;
     const jobs = await getJobs();
 
     return (
@@ -20,6 +25,11 @@ export default async function JobsPage() {
           title="Jobs"
           description="Create roles, capture requirements, and connect candidates to the right hiring funnel."
         />
+        {deleted === "job" ? (
+          <div className="mb-5 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+            Job deleted successfully.
+          </div>
+        ) : null}
         <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <form action={createJob} className="surface rounded-lg p-5">
             <h2 className="text-lg font-semibold text-slate-950">Create job</h2>

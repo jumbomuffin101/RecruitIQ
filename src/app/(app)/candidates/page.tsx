@@ -9,8 +9,13 @@ import { getCandidates, getJobs } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-export default async function CandidatesPage() {
+export default async function CandidatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string }>;
+}) {
   try {
+    const { deleted } = await searchParams;
     const [candidates, jobs] = await Promise.all([getCandidates(), getJobs()]);
 
     return (
@@ -20,6 +25,11 @@ export default async function CandidatesPage() {
           title="Candidates"
           description="Add applicants, store resume context, and generate structured AI analysis for each profile."
         />
+        {deleted === "candidate" ? (
+          <div className="mb-5 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+            Candidate deleted successfully.
+          </div>
+        ) : null}
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <CandidateIntakeForm jobTitles={jobs.map((job) => job.title)} />
 
