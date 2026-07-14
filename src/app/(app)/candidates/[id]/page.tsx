@@ -8,6 +8,7 @@ import { DeleteConfirmationButton } from "@/components/DeleteConfirmationButton"
 import { FitScoreBar } from "@/components/FitScoreBar";
 import { GenerateAnalysisButton } from "@/components/GenerateAnalysisButton";
 import { PageHeader } from "@/components/PageHeader";
+import { CATEGORY_SCORE_LABELS } from "@/lib/evaluations/constants";
 import { formatEnum } from "@/lib/utils";
 import { getCandidateDetail } from "@/lib/data";
 import { type CandidateStage, getCandidateRecommendation } from "@/lib/recommendations";
@@ -57,14 +58,20 @@ export default async function CandidateDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  let candidate: Awaited<ReturnType<typeof getCandidateDetail>>;
 
   try {
-    const candidate = await getCandidateDetail(id);
+    candidate = await getCandidateDetail(id);
+  } catch (error) {
+    return <DatabaseNotice message={error instanceof Error ? error.message : "Connect PostgreSQL to view candidate details."} />;
+  }
 
-    if (!candidate) {
-      notFound();
-    }
+  if (!candidate) {
+    notFound();
+  }
 
+    const latestEvaluation = candidate.evaluations.find((evaluation) => evaluation.status === "COMPLETED") ?? candidate.evaluations[0];
+    const evaluationHistory = candidate.evaluations.slice(0, 5);
     const analysis = candidate.resumeAnalyses[0];
     const kit = candidate.interviewKits[0];
     const application = candidate.applications[0];
@@ -94,6 +101,13 @@ export default async function CandidateDetailPage({
       { title: "Behavioral", questions: behavioralQuestions, icon: UsersRound, tone: "bg-emerald-50 text-emerald-950" },
       { title: "Resume-specific", questions: resumeSpecificQuestions, icon: FileSearch, tone: "bg-violet-50 text-violet-950" },
     ];
+    const requirementGroups = latestEvaluation
+      ? {
+          matched: latestEvaluation.requirementResults.filter((result) => result.status === "MATCHED"),
+          partial: latestEvaluation.requirementResults.filter((result) => result.status === "PARTIAL"),
+          missing: latestEvaluation.requirementResults.filter((result) => result.status === "MISSING"),
+        }
+      : null;
 
     return (
       <>
@@ -296,6 +310,122 @@ export default async function CandidateDetailPage({
             </div>
 
             <div className="surface rounded-lg p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-950">Structured evaluation</h2>
+                  <p className="mt-1 text-sm text-slate-500">Versioned scoring, requirement results, and resume-grounded evidence.</p>
+                </div>
+                {latestEvaluation ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {latestEvaluation.scoringVersion}
+                  </span>
+                ) : null}
+              </div>
+              {latestEvaluation ? (
+                <div className="mt-5 space-y-5">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <div className="rounded-lg bg-slate-950 p-4 text-white">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Overall</p>
+                      <p className="mt-2 text-3xl font-semibold">{latestEvaluation.overallScore ?? "Pending"}</p>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Status</p>
+                      <p className="mt-2 text-sm font-semibold text-blue-950">{formatEnum(latestEvaluation.status)}</p>
+                    </div>
+                    <div className="rounded-lg bg-emerald-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Source</p>
+                      <p className="mt-2 text-sm font-semibold text-emerald-950">{formatEnum(latestEvaluation.source)}</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Generated</p>
+                      <p className="mt-2 text-sm font-semibold text-amber-950">
+                        {(latestEvaluation.completedAt ?? latestEvaluation.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-white p-4">
+                    <p className="text-sm font-semibold text-slate-950">Recommendation</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{latestEvaluation.recommendation || "No recommendation recorded."}</p>
+                  </div>
+
+                  {latestEvaluation.categories.length ? (
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">Category breakdown</h3>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {latestEvaluation.categories.map((category) => (
+                          <div key={category.id} className="rounded-lg bg-slate-50 p-4">
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                              <span className="font-semibold text-slate-800">{CATEGORY_SCORE_LABELS[category.category]}</span>
+                              <span className="font-semibold text-slate-950">{category.score} / {category.maxScore}</span>
+                            </div>
+                            <div className="mt-2 h-2 rounded-full bg-white">
+                              <div className="h-2 rounded-full bg-blue-600" style={{ width: `${category.maxScore ? Math.round((category.score / category.maxScore) * 100) : 0}%` }} />
+                            </div>
+                            {category.explanation ? <p className="mt-2 text-xs leading-5 text-slate-500">{category.explanation}</p> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {requirementGroups ? (
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      {[
+                        ["Matched", requirementGroups.matched, "bg-emerald-50 text-emerald-950"],
+                        ["Partial", requirementGroups.partial, "bg-amber-50 text-amber-950"],
+                        ["Missing", requirementGroups.missing, "bg-red-50 text-red-950"],
+                      ].map(([label, results, tone]) => (
+                        <div key={String(label)} className={`rounded-lg p-4 ${tone}`}>
+                          <h3 className="text-sm font-semibold">{String(label)} requirements</h3>
+                          <ul className="mt-3 space-y-2 text-sm leading-6">
+                            {(results as typeof latestEvaluation.requirementResults).slice(0, 4).map((result) => (
+                              <li key={result.id}>{result.requirement.text}</li>
+                            ))}
+                            {(results as typeof latestEvaluation.requirementResults).length === 0 ? <li>None recorded.</li> : null}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {latestEvaluation.evidence.length ? (
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">Supporting evidence</h3>
+                      <div className="mt-3 space-y-3">
+                        {latestEvaluation.evidence.slice(0, 4).map((evidence) => (
+                          <blockquote key={evidence.id} className="rounded-lg border-l-4 border-blue-500 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-950">
+                            {evidence.excerpt}
+                            {evidence.resumeSection ? <span className="mt-2 block text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">{evidence.resumeSection}</span> : null}
+                          </blockquote>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {evaluationHistory.length ? (
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">Evaluation history</h3>
+                      <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                        {evaluationHistory.map((evaluation) => (
+                          <div key={evaluation.id} className="grid gap-2 px-4 py-3 text-sm text-slate-600 md:grid-cols-[1fr_1fr_0.5fr_0.7fr_0.9fr]">
+                            <span>{evaluation.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                            <span className="font-medium text-slate-800">{evaluation.job.title}</span>
+                            <span>{evaluation.overallScore ?? "-"}</span>
+                            <span>{formatEnum(evaluation.source)}</span>
+                            <span>{evaluation.scoringVersion}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Generate Copilot analysis to create the first structured evaluation record.</p>
+              )}
+            </div>
+
+            <div className="surface rounded-lg p-5">
               <h2 className="text-lg font-semibold text-slate-950">Resume profile</h2>
               <p className="mt-3 text-sm leading-6 text-slate-700">{candidate.resumeSummary || candidate.experienceSummary}</p>
               <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -339,7 +469,4 @@ export default async function CandidateDetailPage({
         </section>
       </>
     );
-  } catch (error) {
-    return <DatabaseNotice message={error instanceof Error ? error.message : "Connect PostgreSQL to view candidate details."} />;
-  }
 }

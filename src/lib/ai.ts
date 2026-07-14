@@ -1,4 +1,6 @@
-import { callOpenRouterJson } from "@/lib/openrouter";
+import { PROMPT_VERSION } from "@/lib/evaluations/constants";
+import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
+import { callOpenRouterJsonWithStatus } from "@/lib/openrouter";
 import { getCandidateRecommendation } from "@/lib/recommendations";
 import { clamp } from "@/lib/utils";
 
@@ -40,7 +42,6 @@ type OpenRouterAnalysisResult = {
   roleMatch: string;
   strengths: string[];
   gaps: string[];
-  recommendedStage: "Applied" | "Screened" | "Interview" | "Offer" | "Rejected";
   nextStep: string;
   technicalQuestions: string[];
   behavioralQuestions: string[];
@@ -265,10 +266,6 @@ async function analyzeWithOpenRouter(
       roleMatch: { type: "string" },
       strengths: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 },
       gaps: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 },
-      recommendedStage: {
-        type: "string",
-        enum: ["Applied", "Screened", "Interview", "Offer", "Rejected"],
-      },
       nextStep: { type: "string" },
       technicalQuestions: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 },
       behavioralQuestions: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 },
@@ -279,7 +276,6 @@ async function analyzeWithOpenRouter(
       "roleMatch",
       "strengths",
       "gaps",
-      "recommendedStage",
       "nextStep",
       "technicalQuestions",
       "behavioralQuestions",
@@ -287,16 +283,17 @@ async function analyzeWithOpenRouter(
     ],
   };
 
-  const parsed = await callOpenRouterJson<OpenRouterAnalysisResult>({
+  const result = await callOpenRouterJsonWithStatus<OpenRouterAnalysisResult>({
     context: "candidate analysis",
     schema,
     temperature: 0.2,
     maxTokens: 1500,
     timeoutMs: 55_000,
+    retries: 1,
     systemPrompt:
       "You are RecruitIQ, a careful AI recruiting copilot. Return strict JSON only. Be concise, recruiter-friendly, and evidence-based. Do not invent employers, degrees, dates, or credentials.",
     prompt:
-      "Create an executive candidate summary, role match explanation, strengths, risks or gaps, suggested next step, and interview kit. Explain the deterministic score; do not create a new score or override the deterministic recommendation.",
+      `Create an executive candidate summary, role match explanation, strengths, risks or gaps, suggested next step, and interview kit. Prompt version: ${PROMPT_VERSION}. Explain the deterministic score; do not create a new score or override the deterministic recommendation.`,
     input: {
       deterministicFitScore: deterministic.fitScore,
       deterministicRecommendedStage: deterministic.recommendedStage,
@@ -320,7 +317,17 @@ async function analyzeWithOpenRouter(
     },
   });
 
-  return parsed ? normalizeAnalysis(parsed, deterministic) : null;
+  if (!result.ok) {
+    return null;
+  }
+
+  const validated = validateCandidateAnalysisResponse(result.data);
+  if (!validated.success) {
+    console.warn(`[OpenRouter] candidate analysis failed schema validation: ${validated.error}`);
+    return null;
+  }
+
+  return normalizeAnalysis(validated.data, deterministic);
 }
 
 export async function analyzeCandidateForJobWithFallback(

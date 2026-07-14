@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BriefcaseBusiness, MapPin, Users } from "lucide-react";
 import { deleteJob } from "@/app/actions";
@@ -11,16 +12,25 @@ import { formatEnum } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+type JobDetail = Prisma.JobGetPayload<{
+  include: {
+    applications: {
+      include: { candidate: true };
+    };
+  };
+}>;
+
 export default async function JobDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  let job: JobDetail | null;
 
   try {
     const org = await getWorkspaceOrganization();
-    const job = await getPrisma().job.findFirst({
+    job = await getPrisma().job.findFirst({
       where: { id, organizationId: org.id },
       include: {
         applications: {
@@ -29,27 +39,30 @@ export default async function JobDetailPage({
         },
       },
     });
+  } catch (error) {
+    return <DatabaseNotice message={error instanceof Error ? error.message : "Connect PostgreSQL to view this job."} />;
+  }
 
-    if (!job) {
-      notFound();
-    }
+  if (!job) {
+    notFound();
+  }
 
-    return (
-      <>
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/jobs" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
-            <ArrowLeft className="h-4 w-4" />
-            Back to jobs
-          </Link>
-          <DeleteConfirmationButton
-            action={deleteJob}
-            hiddenFields={{ jobId: job.id }}
-            buttonLabel="Delete Job"
-            title="Delete job"
-            description="Are you sure you want to delete this job? This action cannot be undone."
-            confirmLabel="Delete Job"
-          />
-        </div>
+  return (
+    <>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <Link href="/jobs" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950">
+          <ArrowLeft className="h-4 w-4" />
+          Back to jobs
+        </Link>
+        <DeleteConfirmationButton
+          action={deleteJob}
+          hiddenFields={{ jobId: job.id }}
+          buttonLabel="Delete Job"
+          title="Delete job"
+          description="Are you sure you want to delete this job? This action cannot be undone."
+          confirmLabel="Delete Job"
+        />
+      </div>
 
         <section className="surface rounded-lg p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -107,9 +120,6 @@ export default async function JobDetailPage({
             )}
           </div>
         </section>
-      </>
-    );
-  } catch (error) {
-    return <DatabaseNotice message={error instanceof Error ? error.message : "Connect PostgreSQL to view this job."} />;
-  }
+    </>
+  );
 }

@@ -5,11 +5,13 @@ import {
   CandidateStatus,
   JobStatus,
   JobType,
+  Prisma,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { analyzeCandidateForJobWithFallback } from "@/lib/ai";
 import { getWorkspaceOrganization } from "@/lib/data";
+import { evaluateCandidateForJob } from "@/lib/evaluations/service";
+import { parseJobRequirementDrafts } from "@/lib/evaluations/scoring";
 import { getPrisma } from "@/lib/prisma";
 import { extractResumeWithFallback } from "@/lib/resume-extract";
 
@@ -40,6 +42,15 @@ function optionalFloat(formData: FormData, key: string) {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+export type CandidateFormState = {
+  error: string;
+  duplicateEmail?: string;
+} | null;
+
+function isPrismaKnownError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+  return error instanceof Prisma.PrismaClientKnownRequestError;
+}
+
 export async function parseResumeAction(formData: FormData) {
   const resumeText = requiredString(formData, "resumeText");
   if (resumeText.length > 100_000) {
@@ -56,26 +67,44 @@ export async function parseResumeAction(formData: FormData) {
 export async function createJob(formData: FormData) {
   const prisma = getPrisma();
   const org = await getWorkspaceOrganization();
+  const requirements = requiredString(formData, "requirements");
 
-  await prisma.job.create({
-    data: {
-      organizationId: org.id,
-      title: requiredString(formData, "title"),
-      department: requiredString(formData, "department"),
-      location: requiredString(formData, "location"),
-      type: String(formData.get("type") ?? "FULL_TIME") as JobType,
-      description: requiredString(formData, "description"),
-      requirements: requiredString(formData, "requirements"),
-      status: String(formData.get("status") ?? "OPEN") as JobStatus,
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    const job = await tx.job.create({
+      data: {
+        organizationId: org.id,
+        title: requiredString(formData, "title"),
+        department: requiredString(formData, "department"),
+        location: requiredString(formData, "location"),
+        type: String(formData.get("type") ?? "FULL_TIME") as JobType,
+        description: requiredString(formData, "description"),
+        requirements,
+        status: String(formData.get("status") ?? "OPEN") as JobStatus,
+      },
+    });
 
-  await prisma.activityLog.create({
-    data: {
-      organizationId: org.id,
-      type: ActivityType.JOB_CREATED,
-      message: "A new job was created.",
-    },
+    const requirementDrafts = parseJobRequirementDrafts(requirements);
+    if (requirementDrafts.length) {
+      await tx.jobRequirement.createMany({
+        data: requirementDrafts.map((requirement) => ({
+          jobId: job.id,
+          text: requirement.text,
+          type: requirement.type,
+          category: requirement.category,
+          weight: requirement.weight,
+          keywords: requirement.keywords,
+          sortOrder: requirement.sortOrder,
+        })),
+      });
+    }
+
+    await tx.activityLog.create({
+      data: {
+        organizationId: org.id,
+        type: ActivityType.JOB_CREATED,
+        message: "A new job was created.",
+      },
+    });
   });
 
   revalidatePath("/jobs");
@@ -83,67 +112,87 @@ export async function createJob(formData: FormData) {
   redirect("/jobs");
 }
 
-export async function createCandidate(formData: FormData) {
+export async function createCandidate(_previousState: CandidateFormState, formData: FormData): Promise<CandidateFormState> {
   const prisma = getPrisma();
   const org = await getWorkspaceOrganization();
   const roleAppliedFor = requiredString(formData, "roleAppliedFor");
   const experienceSummary = requiredString(formData, "experienceSummary");
   const resumeSummary = optionalString(formData, "resumeSummary") ?? experienceSummary;
   const resumeText = optionalString(formData, "resumeText") ?? resumeSummary;
-  const candidate = await prisma.candidate.create({
-    data: {
-      organizationId: org.id,
-      name: requiredString(formData, "name"),
-      email: requiredString(formData, "email"),
-      phone: optionalString(formData, "phone"),
-      location: optionalString(formData, "location"),
-      linkedinUrl: optionalString(formData, "linkedinUrl"),
-      githubUrl: optionalString(formData, "githubUrl"),
-      educationSummary: optionalString(formData, "educationSummary"),
-      currentTitle: optionalString(formData, "currentTitle"),
-      currentCompany: optionalString(formData, "currentCompany"),
-      projectsSummary: optionalString(formData, "projectsSummary"),
-      yearsExperience: optionalFloat(formData, "yearsExperience"),
-      resumeSummary,
-      roleAppliedFor,
-      resumeText,
-      skills: parseSkills(requiredString(formData, "skills")),
-      experienceSummary,
-      status: String(formData.get("status") ?? "APPLIED") as CandidateStatus,
-      notes: optionalString(formData, "notes"),
-    },
-  });
+  const email = requiredString(formData, "email");
+  let candidateId: string;
 
-  const matchingJob = await prisma.job.findFirst({
-    where: {
-      organizationId: org.id,
-      title: { contains: roleAppliedFor, mode: "insensitive" },
-    },
-  });
+  try {
+    const candidate = await prisma.$transaction(async (tx) => {
+      const createdCandidate = await tx.candidate.create({
+        data: {
+          organizationId: org.id,
+          name: requiredString(formData, "name"),
+          email,
+          phone: optionalString(formData, "phone"),
+          location: optionalString(formData, "location"),
+          linkedinUrl: optionalString(formData, "linkedinUrl"),
+          githubUrl: optionalString(formData, "githubUrl"),
+          educationSummary: optionalString(formData, "educationSummary"),
+          currentTitle: optionalString(formData, "currentTitle"),
+          currentCompany: optionalString(formData, "currentCompany"),
+          projectsSummary: optionalString(formData, "projectsSummary"),
+          yearsExperience: optionalFloat(formData, "yearsExperience"),
+          resumeSummary,
+          roleAppliedFor,
+          resumeText,
+          skills: parseSkills(requiredString(formData, "skills")),
+          experienceSummary,
+          status: String(formData.get("status") ?? "APPLIED") as CandidateStatus,
+          notes: optionalString(formData, "notes"),
+        },
+      });
 
-  if (matchingJob) {
-    await prisma.application.create({
-      data: {
-        organizationId: org.id,
-        candidateId: candidate.id,
-        jobId: matchingJob.id,
-        status: candidate.status,
-      },
+      const matchingJob = await tx.job.findFirst({
+        where: {
+          organizationId: org.id,
+          title: { contains: roleAppliedFor, mode: "insensitive" },
+        },
+      });
+
+      if (matchingJob) {
+        await tx.application.create({
+          data: {
+            organizationId: org.id,
+            candidateId: createdCandidate.id,
+            jobId: matchingJob.id,
+            status: createdCandidate.status,
+          },
+        });
+      }
+
+      await tx.activityLog.create({
+        data: {
+          organizationId: org.id,
+          type: ActivityType.CANDIDATE_CREATED,
+          message: `${createdCandidate.name} was added to the pipeline.`,
+        },
+      });
+
+      return createdCandidate;
     });
-  }
+    candidateId = candidate.id;
+  } catch (error) {
+    if (isPrismaKnownError(error) && error.code === "P2002") {
+      return {
+        error: "A candidate with that email already exists in this workspace. Open the existing profile or use a different email.",
+        duplicateEmail: email,
+      };
+    }
 
-  await prisma.activityLog.create({
-    data: {
-      organizationId: org.id,
-      type: ActivityType.CANDIDATE_CREATED,
-      message: `${candidate.name} was added to the pipeline.`,
-    },
-  });
+    console.error("[Candidate] create failed", error);
+    return { error: "Candidate could not be saved. Please review the details and try again." };
+  }
 
   revalidatePath("/candidates");
   revalidatePath("/pipeline");
   revalidatePath("/dashboard");
-  redirect(`/candidates/${candidate.id}`);
+  redirect(`/candidates/${candidateId}`);
 }
 
 export async function updateCandidateStatus(formData: FormData) {
@@ -152,11 +201,20 @@ export async function updateCandidateStatus(formData: FormData) {
   const status = String(formData.get("status") ?? "APPLIED") as CandidateStatus;
   const org = await getWorkspaceOrganization();
 
+  const existingCandidate = await prisma.candidate.findFirst({
+    where: { id: candidateId, organizationId: org.id },
+    select: { id: true },
+  });
+
+  if (!existingCandidate) {
+    throw new Error("Candidate not found in the active workspace.");
+  }
+
   const candidate = await prisma.candidate.update({
-    where: { id: candidateId },
+    where: { id: existingCandidate.id },
     data: {
       status,
-      applications: { updateMany: { where: {}, data: { status } } },
+      applications: { updateMany: { where: { organizationId: org.id }, data: { status } } },
     },
   });
 
@@ -254,62 +312,11 @@ export async function generateCandidateAnalysis(formData: FormData) {
     throw new Error("Create a job before generating candidate analysis.");
   }
 
-  // TODO: Extend this provider switch to Amazon Bedrock when deploying against Aurora in AWS.
-  const analysis = await analyzeCandidateForJobWithFallback(candidate, job);
-
-  await prisma.$transaction([
-    prisma.resumeAnalysis.create({
-      data: {
-        candidateId: candidate.id,
-        jobId: job.id,
-        fitScore: analysis.fitScore,
-        summary: analysis.summary,
-        roleMatch: analysis.roleMatch,
-        strengths: analysis.strengths,
-        gaps: analysis.gaps,
-        recommendedStage: analysis.recommendedStage,
-        nextStep: analysis.nextStep,
-        technicalQuestions: analysis.technicalQuestions,
-        behavioralQuestions: analysis.behavioralQuestions,
-        resumeSpecificQuestions: analysis.resumeSpecificQuestions,
-        source: analysis.source,
-      },
-    }),
-    prisma.interviewKit.create({
-      data: {
-        candidateId: candidate.id,
-        jobId: job.id,
-        questions: analysis.interviewQuestions,
-        focusAreas: analysis.gaps,
-      },
-    }),
-    prisma.candidate.update({
-      where: { id: candidate.id },
-      data: { status: analysis.recommendedStage },
-    }),
-    prisma.application.upsert({
-      where: { candidateId_jobId: { candidateId: candidate.id, jobId: job.id } },
-      create: {
-        organizationId: org.id,
-        candidateId: candidate.id,
-        jobId: job.id,
-        status: analysis.recommendedStage,
-        fitScore: analysis.fitScore,
-      },
-      update: {
-        status: analysis.recommendedStage,
-        fitScore: analysis.fitScore,
-      },
-    }),
-    prisma.activityLog.create({
-      data: {
-        organizationId: org.id,
-        type: ActivityType.ANALYSIS_GENERATED,
-        message: `AI analysis generated for ${candidate.name}.`,
-        metadata: { candidateId: candidate.id, jobId: job.id, fitScore: analysis.fitScore, source: analysis.source },
-      },
-    }),
-  ]);
+  await evaluateCandidateForJob({
+    organizationId: org.id,
+    candidateId: candidate.id,
+    jobId: job.id,
+  });
 
   revalidatePath(`/candidates/${candidate.id}`);
   revalidatePath("/candidates");

@@ -12,6 +12,7 @@ type OpenRouterJsonRequest = {
   temperature?: number;
   systemPrompt?: string;
   timeoutMs?: number;
+  retries?: number;
 };
 
 type ChatCompletionPayload = {
@@ -25,6 +26,27 @@ type ChatCompletionPayload = {
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
 const DEFAULT_TIMEOUT_MS = 18_000;
+
+export type OpenRouterFailureReason =
+  | "missing_config"
+  | "timeout"
+  | "invalid_json"
+  | "rate_limited"
+  | "server_error"
+  | "client_error"
+  | "network_error";
+
+export type OpenRouterJsonResult<T> =
+  | { ok: true; data: T; attempts: number; model: string }
+  | {
+      ok: false;
+      reason: OpenRouterFailureReason;
+      message: string;
+      retryable: boolean;
+      attempts: number;
+      model: string;
+      status?: number;
+    };
 
 function getOpenRouterConfig() {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
@@ -40,6 +62,10 @@ function getOpenRouterConfig() {
 
 export function hasOpenRouterConfig() {
   return Boolean(getOpenRouterConfig().apiKey);
+}
+
+export function getOpenRouterModelName() {
+  return getOpenRouterConfig().model;
 }
 
 export function getOpenRouterStatus() {
@@ -103,6 +129,12 @@ export function parseOpenRouterJson<T>(content: string | Record<string, unknown>
   }
 }
 
+export function classifyOpenRouterStatus(status: number): Pick<Extract<OpenRouterJsonResult<unknown>, { ok: false }>, "reason" | "retryable"> {
+  if (status === 429) return { reason: "rate_limited", retryable: true };
+  if (status >= 500) return { reason: "server_error", retryable: true };
+  return { reason: "client_error", retryable: false };
+}
+
 function buildUserPrompt({
   prompt,
   schema,
@@ -120,26 +152,25 @@ function buildUserPrompt({
   ].join("\n");
 }
 
-export async function callOpenRouterJson<T>({
+async function executeOpenRouterJson<T>({
+  config,
   context,
-  prompt,
-  schema,
-  input,
-  maxTokens = 1200,
-  temperature = 0.2,
-  systemPrompt = "You are a recruiting analyst. Return strict JSON only.",
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-}: OpenRouterJsonRequest) {
-  const config = getOpenRouterConfig();
-
-  console.info(`[OpenRouter] configured: ${Boolean(config.apiKey)}`);
-  console.info(`[OpenRouter] model: ${config.model}`);
-
-  if (!config.apiKey) {
-    return null;
-  }
-
-  const userPrompt = buildUserPrompt({ prompt, schema, input });
+  userPrompt,
+  systemPrompt,
+  temperature,
+  maxTokens,
+  timeoutMs,
+  attempt,
+}: {
+  config: ReturnType<typeof getOpenRouterConfig>;
+  context: string;
+  userPrompt: string;
+  systemPrompt: string;
+  temperature: number;
+  maxTokens: number;
+  timeoutMs: number;
+  attempt: number;
+}): Promise<OpenRouterJsonResult<T>> {
   const promptCharacterLength = systemPrompt.length + userPrompt.length;
   const controller = new AbortController();
   let timedOut = false;
@@ -166,8 +197,17 @@ export async function callOpenRouterJson<T>({
     });
 
     if (!response.ok) {
+      const classification = classifyOpenRouterStatus(response.status);
       console.warn(`[OpenRouter] ${context} failed: status ${response.status} ${response.statusText}`);
-      return null;
+      return {
+        ok: false,
+        reason: classification.reason,
+        message: `Provider returned ${response.status}.`,
+        retryable: classification.retryable,
+        attempts: attempt,
+        model: config.model,
+        status: response.status,
+      };
     }
 
     const payload = (await response.json()) as ChatCompletionPayload;
@@ -176,22 +216,105 @@ export async function callOpenRouterJson<T>({
 
     if (!parsed) {
       console.warn(`[OpenRouter] ${context} failed: invalid JSON response`);
-      return null;
+      return {
+        ok: false,
+        reason: "invalid_json",
+        message: "Provider returned invalid JSON.",
+        retryable: false,
+        attempts: attempt,
+        model: config.model,
+      };
     }
 
     console.info(`[OpenRouter] ${context} succeeded`);
-    return parsed;
+    return { ok: true, data: parsed, attempts: attempt, model: config.model };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     if (timedOut || (error instanceof Error && error.name === "AbortError")) {
       console.warn(
         `[OpenRouter] timed out after ${timeoutMs} ms; model=${config.model}; promptCharacters=${promptCharacterLength}`,
       );
-      return null;
+      return {
+        ok: false,
+        reason: "timeout",
+        message: "Provider request timed out.",
+        retryable: true,
+        attempts: attempt,
+        model: config.model,
+      };
     }
     console.warn(`[OpenRouter] ${context} failed: ${message}`);
-    return null;
+    return {
+      ok: false,
+      reason: "network_error",
+      message: "Provider request failed.",
+      retryable: true,
+      attempts: attempt,
+      model: config.model,
+    };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function callOpenRouterJsonWithStatus<T>({
+  context,
+  prompt,
+  schema,
+  input,
+  maxTokens = 1200,
+  temperature = 0.2,
+  systemPrompt = "You are a recruiting analyst. Return strict JSON only.",
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  retries = 1,
+}: OpenRouterJsonRequest): Promise<OpenRouterJsonResult<T>> {
+  const config = getOpenRouterConfig();
+
+  console.info(`[OpenRouter] configured: ${Boolean(config.apiKey)}`);
+  console.info(`[OpenRouter] model: ${config.model}`);
+
+  if (!config.apiKey) {
+    return {
+      ok: false,
+      reason: "missing_config",
+      message: "OpenRouter is not configured.",
+      retryable: false,
+      attempts: 0,
+      model: config.model,
+    };
+  }
+
+  const userPrompt = buildUserPrompt({ prompt, schema, input });
+  let result: OpenRouterJsonResult<T> | null = null;
+
+  for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
+    result = await executeOpenRouterJson<T>({
+      config,
+      context,
+      userPrompt,
+      systemPrompt,
+      temperature,
+      maxTokens,
+      timeoutMs,
+      attempt,
+    });
+
+    if (result.ok || !result.retryable || attempt > retries) {
+      return result;
+    }
+  }
+
+  return result ?? {
+    ok: false,
+    reason: "network_error",
+    message: "Provider request did not complete.",
+    retryable: true,
+    attempts: 0,
+    model: config.model,
+  };
+}
+
+export async function callOpenRouterJson<T>(request: OpenRouterJsonRequest) {
+  const result = await callOpenRouterJsonWithStatus<T>(request);
+  return result.ok ? result.data : null;
 }

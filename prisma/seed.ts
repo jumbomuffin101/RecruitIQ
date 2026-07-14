@@ -1,5 +1,9 @@
-import { PrismaClient, ActivityType, CandidateStatus, JobStatus, JobType } from "@prisma/client";
+import { PrismaClient, ActivityType, CandidateStatus, EvaluationSource, EvaluationStatus, JobStatus, JobType, RequirementMatchStatus } from "@prisma/client";
 import { analyzeCandidateForJob } from "../src/lib/ai";
+import { PROMPT_VERSION, SCORING_VERSION } from "../src/lib/evaluations/constants";
+import { collectEvidence } from "../src/lib/evaluations/evidence";
+import { calculateEvaluationScoreBreakdown, parseJobRequirementDrafts } from "../src/lib/evaluations/scoring";
+import { getCandidateRecommendation } from "../src/lib/recommendations";
 
 const prisma = new PrismaClient();
 
@@ -64,6 +68,26 @@ async function main() {
       },
     }),
   ]);
+  const requirementsByJobId = new Map<string, Awaited<ReturnType<typeof prisma.jobRequirement.findMany>>>();
+
+  for (const job of jobs) {
+    const drafts = parseJobRequirementDrafts(job.requirements);
+    await prisma.jobRequirement.createMany({
+      data: drafts.map((draft) => ({
+        jobId: job.id,
+        text: draft.text,
+        type: draft.type,
+        category: draft.category,
+        weight: draft.weight,
+        keywords: draft.keywords,
+        sortOrder: draft.sortOrder,
+      })),
+    });
+    requirementsByJobId.set(
+      job.id,
+      await prisma.jobRequirement.findMany({ where: { jobId: job.id }, orderBy: { sortOrder: "asc" } }),
+    );
+  }
 
   const candidateInputs = [
     {
@@ -189,6 +213,72 @@ async function main() {
       },
     });
     if (input.analyzed) {
+      const requirements = (requirementsByJobId.get(input.job.id) ?? []).map((requirement) => ({
+        id: requirement.id,
+        text: requirement.text,
+        type: requirement.type,
+        category: requirement.category,
+        weight: requirement.weight,
+        keywords: requirement.keywords,
+        sortOrder: requirement.sortOrder,
+      }));
+      const breakdown = calculateEvaluationScoreBreakdown({ candidate, job: input.job, requirements });
+      const recommendation = getCandidateRecommendation({ fitScore: input.scoreOverride, currentStatus: input.status });
+      const evaluation = await prisma.candidateEvaluation.create({
+        data: {
+          candidateId: candidate.id,
+          jobId: input.job.id,
+          overallScore: input.scoreOverride,
+          confidence: breakdown.confidence,
+          recommendation: recommendation.nextStep,
+          summary: analysis.summary,
+          source: EvaluationSource.DETERMINISTIC,
+          status: EvaluationStatus.COMPLETED,
+          scoringVersion: SCORING_VERSION,
+          promptVersion: PROMPT_VERSION,
+          completedAt: new Date(),
+        },
+      });
+      await prisma.evaluationCategoryScore.createMany({
+        data: breakdown.categoryScores.map((category) => ({
+          evaluationId: evaluation.id,
+          category: category.category,
+          score: category.score,
+          maxScore: category.maxScore,
+          weight: category.weight,
+          explanation: category.explanation,
+        })),
+      });
+      const evidence = collectEvidence({ resumeText: candidate.resumeText, requirements, scores: breakdown.requirementScores });
+
+      for (const score of breakdown.requirementScores) {
+        const requirementEvidence = evidence.find((item) => item.requirementId === score.requirementId);
+        const result = await prisma.requirementResult.create({
+          data: {
+            evaluationId: evaluation.id,
+            requirementId: score.requirementId,
+            status: score.status,
+            score: score.score,
+            maxScore: score.maxScore,
+            confidence: score.confidence,
+            explanation: score.explanation,
+          },
+        });
+
+        if (requirementEvidence && score.status !== RequirementMatchStatus.MISSING) {
+          await prisma.evaluationEvidence.create({
+            data: {
+              evaluationId: evaluation.id,
+              requirementResultId: result.id,
+              resumeSection: requirementEvidence.resumeSection,
+              excerpt: requirementEvidence.excerpt,
+              startOffset: requirementEvidence.startOffset,
+              endOffset: requirementEvidence.endOffset,
+              confidence: requirementEvidence.confidence,
+            },
+          });
+        }
+      }
       await prisma.resumeAnalysis.create({
         data: {
           candidateId: candidate.id, jobId: input.job.id, fitScore: input.scoreOverride,

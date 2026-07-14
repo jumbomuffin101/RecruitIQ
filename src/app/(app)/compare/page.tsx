@@ -109,6 +109,9 @@ export default async function ComparePage({
                   </div>
                   <div className="mt-5">
                     <FitScoreBar score={candidate.fitScore} size="lg" />
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      {candidate.scoreSource}
+                    </p>
                   </div>
                 </div>
 

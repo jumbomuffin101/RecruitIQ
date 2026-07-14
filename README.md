@@ -30,6 +30,7 @@ Small recruiting teams often run hiring from spreadsheets, inboxes, and inconsis
 - Candidate profiles with skills, notes, stage, and resume evidence
 - Recruiter Copilot with deterministic fit score, AI-enhanced executive summary, role match, strengths, risks, next step, and interview kit
 - OpenRouter analysis with deterministic fallback when no key is configured or the provider is unavailable
+- Versioned structured evaluations with category scores, requirement-level results, and grounded resume evidence
 - Action Center with prioritized recruiter tasks and recent activity
 - Job-specific ranked candidate comparison
 - Kanban-style pipeline updates
@@ -53,9 +54,23 @@ Server Action -> OpenRouter API for summaries, strengths/gaps, and interview kit
 
 ### Database Architecture
 
-RecruitIQ uses Amazon Aurora PostgreSQL as its production database. Prisma maps organizations, users, jobs, candidates, applications, resume analyses, interview kits, and activity logs into relational PostgreSQL models. Aurora is a strong fit because hiring workflows require reliable transactions, relational integrity, auditable activity, and scalable querying across candidates and roles.
+RecruitIQ uses Amazon Aurora PostgreSQL as its production database. Prisma maps organizations, users, jobs, candidates, applications, job requirements, candidate evaluations, requirement results, resume evidence, legacy resume analyses, interview kits, and activity logs into relational PostgreSQL models. Aurora is a strong fit because hiring workflows require reliable transactions, relational integrity, auditable activity, and scalable querying across candidates and roles.
 
 The Prisma schema uses PostgreSQL-native features and remains portable to other PostgreSQL-compatible environments for local development or migration work.
+
+### Evaluation Architecture
+
+RecruitIQ now writes versioned `CandidateEvaluation` records alongside the existing `ResumeAnalysis` and `InterviewKit` rows. The legacy rows keep the current UI stable, while the structured evaluation tables provide the foundation for an explainable scoring engine.
+
+- `JobRequirement`: normalized requirements derived from a job's requirement text, including required/preferred type, category, weight, keywords, and order.
+- `CandidateEvaluation`: one immutable evaluation run for one candidate and one job, with status, source, score, recommendation, scoring version, prompt version, model name, and error summary.
+- `EvaluationCategoryScore`: category-level score breakdowns such as required skills, project alignment, education, domain alignment, and preferred qualifications.
+- `RequirementResult`: matched, partial, or missing result for each evaluated job requirement.
+- `EvaluationEvidence`: exact excerpts from stored resume text that support matched or partially matched requirements.
+
+The numerical score is deterministic. OpenRouter may improve the narrative summary, strengths, gaps, and interview kit, but it does not independently decide the final score or recommendation. If OpenRouter is missing, times out, returns invalid JSON, returns malformed schema output, or responds with a transient provider error, RecruitIQ falls back to deterministic analysis and keeps the workflow usable.
+
+Scoring and prompt versions are centralized in `src/lib/evaluations/constants.ts` and persisted with each evaluation. Prior evaluation versions are retained; regenerating analysis creates a new evaluation instead of overwriting history.
 
 ## Tech Stack
 
@@ -75,6 +90,7 @@ The Prisma schema uses PostgreSQL-native features and remains portable to other 
 - `src/app/actions.ts`: trusted server mutations
 - `src/app/api/resume/parse/route.ts`: private PDF/TXT extraction route
 - `src/lib/resume-extract.ts`: deterministic and optional OpenRouter structured extraction
+- `src/lib/evaluations/*`: structured evaluation scoring, evidence, schemas, constants, and persistence service
 - `src/components/CandidateIntakeForm.tsx`: two-step editable resume intake
 - `src/lib/ai.ts`: OpenRouter integration and deterministic fallback
 - `src/app/(app)/dashboard/page.tsx`: metrics and Action Center
@@ -98,7 +114,9 @@ OPENROUTER_SITE_URL=
 - OpenRouter is used server-side to improve candidate summaries, role match explanations, strengths, gaps, next steps, and interview kits.
 - Fit scores remain explainable and deterministic based on skill and requirement matching.
 - When OpenRouter is missing, times out, returns invalid JSON, or is unavailable, RecruitIQ uses deterministic candidate analysis.
+- OpenRouter candidate analysis responses are validated with Zod before any AI-generated narrative fields are persisted.
 - No resume files are stored or exposed publicly; only extracted text is saved to PostgreSQL.
+- `/api/ai-status` is a diagnostic route. In production it returns only restricted configuration status and never returns secrets, model routing details, or provider URLs.
 
 ## Local Setup
 
@@ -106,7 +124,7 @@ OPENROUTER_SITE_URL=
 npm install
 cp .env.example .env
 npm run db:generate
-npm run db:push
+npx prisma migrate deploy
 npm run db:seed
 npm run dev
 ```
@@ -127,6 +145,16 @@ docker compose up -d postgres
 4. Apply the Prisma schema to the production database.
 5. Seed the sample workspace only when a populated evaluation environment is desired.
 
+Use Prisma migrations for production changes:
+
+```bash
+npx prisma migrate deploy
+```
+
+This repository includes a baseline migration for the schema that existed before structured evaluations. Existing non-empty databases created with `prisma db push` should mark that baseline as applied once, then deploy later additive migrations.
+
+Use `prisma db push` only for disposable local experiments.
+
 ## Demo Walkthrough
 
 1. Open `/quick-start` for the guided product flow.
@@ -135,7 +163,7 @@ docker compose up -d postgres
 4. Upload a PDF or TXT resume from `/candidates`, extract structured details, and edit the profile before saving.
 5. Open the saved candidate and review the concise summary, education, experience, projects, and raw resume disclosure.
 6. Generate Recruiter Copilot analysis.
-7. Show the deterministic fit score, AI-enhanced evidence, risks, suggested next step, interview kit, and analysis source badge.
+7. Show the deterministic fit score, structured evaluation breakdown, grounded resume evidence, risks, suggested next step, interview kit, and analysis source badge.
 8. Use `/compare` to rank applicants for a selected job.
 9. Move a candidate in `/pipeline` and finish with `/analytics`.
 10. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
@@ -164,6 +192,14 @@ docker compose up -d postgres
 - Candidate score history and configurable evaluation rubrics
 - Billing and plan management after product validation
 
+## Known Limitations
+
+- Authentication and organization-level access control are not implemented yet.
+- Job and candidate editing are not implemented yet.
+- The current resume evidence UI is excerpt-based; it does not highlight text inside a rendered resume.
+- PDF parsing works for text-based PDFs, not scanned image-only resumes.
+- The legacy `ResumeAnalysis` and `InterviewKit` models remain for compatibility while the structured evaluation model is adopted.
+
 ## Security Notes
 
 - `.env` and `.env*.local` are gitignored.
@@ -177,4 +213,5 @@ docker compose up -d postgres
 ```bash
 npm run lint
 npm run build
+npm test
 ```

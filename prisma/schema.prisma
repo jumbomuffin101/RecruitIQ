@@ -37,14 +37,55 @@ enum ActivityType {
   NOTE_ADDED
 }
 
+enum RequirementType {
+  REQUIRED
+  PREFERRED
+}
+
+enum RequirementCategory {
+  SKILL
+  EXPERIENCE
+  EDUCATION
+  PROJECT
+  DOMAIN
+  OTHER
+}
+
+enum EvaluationSource {
+  DETERMINISTIC
+  OPENROUTER
+  HYBRID
+}
+
+enum EvaluationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum EvaluationScoreCategory {
+  REQUIRED_SKILLS
+  PREFERRED_QUALIFICATIONS
+  RELEVANT_EXPERIENCE
+  PROJECT_ALIGNMENT
+  EDUCATION
+  DOMAIN_ALIGNMENT
+}
+
+enum RequirementMatchStatus {
+  MATCHED
+  PARTIAL
+  MISSING
+}
+
 model User {
-  id             String       @id @default(cuid())
-  email          String       @unique
+  id             String        @id @default(cuid())
+  email          String        @unique
   name           String
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model Organization {
@@ -61,32 +102,34 @@ model Organization {
 }
 
 model Job {
-  id             String        @id @default(cuid())
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  title          String
-  department     String
-  location       String
-  type           JobType       @default(FULL_TIME)
-  description    String
-  requirements   String
-  status         JobStatus     @default(OPEN)
-  applications   Application[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id              String                @id @default(cuid())
+  organizationId  String
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title           String
+  department      String
+  location        String
+  type            JobType               @default(FULL_TIME)
+  description     String
+  requirements    String
+  status          JobStatus             @default(OPEN)
+  applications    Application[]
+  jobRequirements JobRequirement[]
+  evaluations     CandidateEvaluation[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 }
 
 model Candidate {
-  id                String          @id @default(cuid())
+  id                String                @id @default(cuid())
   organizationId    String
-  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name              String
   email             String
   phone             String?
   location          String?
   linkedinUrl       String?
   githubUrl         String?
-  educationSummary String?
+  educationSummary  String?
   currentTitle      String?
   currentCompany    String?
   projectsSummary   String?
@@ -96,15 +139,32 @@ model Candidate {
   resumeText        String
   skills            String[]
   experienceSummary String
-  status            CandidateStatus @default(APPLIED)
+  status            CandidateStatus       @default(APPLIED)
   notes             String?
   applications      Application[]
   resumeAnalyses    ResumeAnalysis[]
   interviewKits     InterviewKit[]
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  evaluations       CandidateEvaluation[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
   @@unique([organizationId, email])
+}
+
+model JobRequirement {
+  id        String              @id @default(cuid())
+  jobId     String
+  text      String
+  type      RequirementType
+  category  RequirementCategory
+  weight    Int
+  keywords  String[]
+  sortOrder Int                 @default(0)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  job     Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  results RequirementResult[]
 }
 
 model Application {
@@ -124,22 +184,99 @@ model Application {
 }
 
 model ResumeAnalysis {
-  id               String    @id @default(cuid())
-  candidateId      String
-  candidate        Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  jobId            String?
-  fitScore         Int
-  summary          String
-  roleMatch        String?
-  strengths        String[]
-  gaps             String[]
-  recommendedStage String
-  nextStep         String?
-  technicalQuestions String[] @default([])
-  behavioralQuestions String[] @default([])
-  resumeSpecificQuestions String[] @default([])
-  source           String    @default("deterministic")
-  createdAt        DateTime  @default(now())
+  id                      String    @id @default(cuid())
+  candidateId             String
+  candidate               Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId                   String?
+  fitScore                Int
+  summary                 String
+  roleMatch               String?
+  strengths               String[]
+  gaps                    String[]
+  recommendedStage        String
+  nextStep                String?
+  technicalQuestions      String[]  @default([])
+  behavioralQuestions     String[]  @default([])
+  resumeSpecificQuestions String[]  @default([])
+  source                  String    @default("deterministic")
+  createdAt               DateTime  @default(now())
+}
+
+model CandidateEvaluation {
+  id             String           @id @default(cuid())
+  candidateId    String
+  jobId          String
+  overallScore   Int?
+  confidence     Float?
+  recommendation String?
+  summary        String?
+  source         EvaluationSource
+  status         EvaluationStatus @default(PENDING)
+  scoringVersion String
+  promptVersion  String?
+  modelName      String?
+  errorMessage   String?
+  createdAt      DateTime         @default(now())
+  completedAt    DateTime?
+
+  candidate          Candidate                 @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job                Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  categories         EvaluationCategoryScore[]
+  requirementResults RequirementResult[]
+  evidence           EvaluationEvidence[]
+
+  @@index([candidateId, jobId, createdAt])
+  @@index([jobId, status, createdAt])
+}
+
+model EvaluationCategoryScore {
+  id           String                  @id @default(cuid())
+  evaluationId String
+  category     EvaluationScoreCategory
+  score        Int
+  maxScore     Int
+  weight       Int
+  explanation  String?
+  createdAt    DateTime                @default(now())
+
+  evaluation CandidateEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+}
+
+model RequirementResult {
+  id            String                 @id @default(cuid())
+  evaluationId  String
+  requirementId String
+  status        RequirementMatchStatus
+  score         Int
+  maxScore      Int
+  confidence    Float?
+  explanation   String?
+  createdAt     DateTime               @default(now())
+
+  evaluation  CandidateEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  requirement JobRequirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  evidence    EvaluationEvidence[]
+
+  @@index([evaluationId])
+  @@index([requirementId])
+}
+
+model EvaluationEvidence {
+  id                  String   @id @default(cuid())
+  evaluationId        String
+  requirementResultId String?
+  resumeSection       String?
+  excerpt             String
+  startOffset         Int?
+  endOffset           Int?
+  confidence          Float?
+  createdAt           DateTime @default(now())
+
+  evaluation        CandidateEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  requirementResult RequirementResult?  @relation(fields: [requirementResultId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@index([requirementResultId])
 }
 
 model InterviewKit {

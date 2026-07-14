@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { ArrowLeft, CheckCircle2, FileSearch, LoaderCircle, Save, Sparkles } from "lucide-react";
 import { createCandidate, parseResumeAction } from "@/app/actions";
 import { CandidateAvatar } from "@/components/CandidateAvatar";
@@ -15,12 +16,27 @@ const emptyExtraction: ResumeExtraction = {
 
 const fieldClass = "focus-ring w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
 
+function SaveCandidateButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      disabled={pending}
+      className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70"
+    >
+      {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+      {pending ? "Saving candidate" : "Save Candidate"}
+    </button>
+  );
+}
+
 export function CandidateIntakeForm({ jobTitles }: { jobTitles: string[] }) {
   const [step, setStep] = useState<"resume" | "review">("resume");
   const [resumeText, setResumeText] = useState("");
   const [details, setDetails] = useState<ResumeExtraction>(emptyExtraction);
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState("");
+  const [formState, formAction] = useActionState(createCandidate, null);
 
   async function extractDetails() {
     if (!resumeText.trim()) {
@@ -70,7 +86,7 @@ export function CandidateIntakeForm({ jobTitles }: { jobTitles: string[] }) {
   }
 
   return (
-    <form action={createCandidate} className="surface rounded-lg p-5">
+    <form action={formAction} className="surface rounded-lg p-5">
       <input type="hidden" name="resumeText" value={resumeText} />
       <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
@@ -91,6 +107,12 @@ export function CandidateIntakeForm({ jobTitles }: { jobTitles: string[] }) {
           <p className="mt-1 text-xs text-emerald-800">{[details.email, details.phone, details.location].filter(Boolean).join(" | ")}</p>
           {details.resumeSummary ? <p className="mt-3 text-sm leading-6 text-emerald-900">{details.resumeSummary}</p> : null}
           <div className="mt-3 flex flex-wrap gap-2">{details.skills.slice(0, 8).map((skill) => <span key={skill} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800">{skill}</span>)}</div>
+        </div>
+      ) : null}
+
+      {formState?.error ? (
+        <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          {formState.error}
         </div>
       ) : null}
 
@@ -118,7 +140,7 @@ export function CandidateIntakeForm({ jobTitles }: { jobTitles: string[] }) {
           <label className="text-sm font-semibold text-slate-700">Recruiter notes<textarea name="notes" rows={2} className={`${fieldClass} mt-2`} /></label>
         </div>
       </div>
-      <button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"><Save className="h-4 w-4" />Save Candidate</button>
+      <SaveCandidateButton />
     </form>
   );
 }

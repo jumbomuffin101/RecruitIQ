@@ -1,3 +1,5 @@
+import { RECOMMENDATION_THRESHOLDS } from "@/lib/evaluations/constants";
+
 export type CandidateStage = "APPLIED" | "SCREENED" | "INTERVIEW" | "OFFER" | "REJECTED";
 
 export type RecommendationTone = "advance" | "review" | "reject" | "neutral";
@@ -10,9 +12,9 @@ export type CandidateRecommendation = {
 };
 
 export function getDeterministicRecommendedStage(fitScore: number): CandidateStage {
-  if (fitScore >= 85) return "INTERVIEW";
-  if (fitScore >= 70) return "SCREENED";
-  if (fitScore >= 50) return "APPLIED";
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.interview) return "INTERVIEW";
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.screened) return "SCREENED";
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.applied) return "APPLIED";
   return "REJECTED";
 }
 
@@ -52,7 +54,7 @@ export function getCandidateRecommendation({
     };
   }
 
-  if (fitScore >= 85) {
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.interview) {
     return {
       recommendedStage,
       nextStep: "Advance to Interview",
@@ -61,7 +63,7 @@ export function getCandidateRecommendation({
     };
   }
 
-  if (fitScore >= 70) {
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.screened) {
     return currentStatus === "SCREENED"
       ? {
           recommendedStage,

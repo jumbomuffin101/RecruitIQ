@@ -50,6 +50,20 @@ export async function getCandidateDetail(id: string) {
       applications: { include: { job: true }, orderBy: { createdAt: "desc" } },
       resumeAnalyses: { orderBy: { createdAt: "desc" }, take: 1 },
       interviewKits: { orderBy: { createdAt: "desc" }, take: 1 },
+      evaluations: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          job: true,
+          categories: true,
+          requirementResults: {
+            include: {
+              requirement: true,
+              evidence: true,
+            },
+          },
+          evidence: true,
+        },
+      },
     },
   });
 }
@@ -165,6 +179,14 @@ export async function getCompareData(jobId?: string) {
     include: {
       applications: true,
       resumeAnalyses: { orderBy: { createdAt: "desc" } },
+      evaluations: {
+        where: { jobId: selectedJob.id, status: "COMPLETED" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        include: {
+          requirementResults: { include: { requirement: true } },
+        },
+      },
     },
   });
 
@@ -172,6 +194,7 @@ export async function getCompareData(jobId?: string) {
     .map((candidate) => {
       const savedAnalysis = candidate.resumeAnalyses.find((analysis) => analysis.jobId === selectedJob.id);
       const savedApplication = candidate.applications.find((application) => application.jobId === selectedJob.id);
+      const structuredEvaluation = candidate.evaluations[0];
       const analysis = savedAnalysis
         ? {
             fitScore: savedAnalysis.fitScore,
@@ -182,7 +205,7 @@ export async function getCompareData(jobId?: string) {
             interviewQuestions: [],
           }
         : analyzeCandidateForJob(candidate, selectedJob);
-      const fitScore = savedApplication?.fitScore ?? analysis.fitScore;
+      const fitScore = structuredEvaluation?.overallScore ?? savedApplication?.fitScore ?? analysis.fitScore;
       const recommendation = getCandidateRecommendation({
         fitScore,
         currentStatus: candidate.status,
@@ -204,6 +227,7 @@ export async function getCompareData(jobId?: string) {
         recommendedNextAction: recommendation.nextStep,
         recommendationDescription: recommendation.description,
         recommendationTone: recommendation.tone,
+        scoreSource: structuredEvaluation ? "Persisted evaluation" : "Deterministic preview",
       };
     })
     .sort((a, b) => b.fitScore - a.fitScore);
