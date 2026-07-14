@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, BriefcaseBusiness, CheckCircle2, CircleAlert, ExternalLink, FileSearch, FolderKanban, GraduationCap, ListChecks, Mail, MapPin, MessageSquareText, Phone, Target, UsersRound, Wrench } from "lucide-react";
-import { deleteCandidate, generateCandidateAnalysis, updateCandidateStatus } from "@/app/actions";
+import { deleteCandidate, updateCandidateStatus } from "@/app/actions";
 import { CandidateAvatar } from "@/components/CandidateAvatar";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { DeleteConfirmationButton } from "@/components/DeleteConfirmationButton";
 import { FitScoreBar } from "@/components/FitScoreBar";
-import { GenerateAnalysisButton } from "@/components/GenerateAnalysisButton";
+import { GenerateAnalysisForm } from "@/components/GenerateAnalysisForm";
 import { PageHeader } from "@/components/PageHeader";
 import { CATEGORY_SCORE_LABELS } from "@/lib/evaluations/constants";
 import { formatEnum } from "@/lib/utils";
@@ -147,10 +147,7 @@ export default async function CandidateDetailPage({
                 description="Are you sure you want to delete this candidate? This action cannot be undone."
                 confirmLabel="Delete Candidate"
               />
-              <form action={generateCandidateAnalysis}>
-                <input type="hidden" name="candidateId" value={candidate.id} />
-                <GenerateAnalysisButton hasAnalysis={Boolean(analysis)} />
-              </form>
+              <GenerateAnalysisForm candidateId={candidate.id} hasAnalysis={Boolean(analysis)} />
             </div>
           </div>
         </div>

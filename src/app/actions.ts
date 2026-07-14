@@ -10,6 +10,11 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getWorkspaceOrganization } from "@/lib/data";
+import {
+  createEvaluationErrorState,
+  createEvaluationSuccessState,
+  type EvaluationActionState,
+} from "@/lib/evaluations/action-state";
 import { evaluateCandidateForJob } from "@/lib/evaluations/service";
 import { parseJobRequirementDrafts } from "@/lib/evaluations/scoring";
 import { getPrisma } from "@/lib/prisma";
@@ -49,6 +54,14 @@ export type CandidateFormState = {
 
 function isPrismaKnownError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   return error instanceof Prisma.PrismaClientKnownRequestError;
+}
+
+function safeEvaluationActionError(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message.slice(0, 220);
+  }
+
+  return "Candidate evaluation could not be completed. Please try again.";
 }
 
 export async function parseResumeAction(formData: FormData) {
@@ -285,43 +298,58 @@ export async function deleteJob(formData: FormData) {
   redirect("/jobs?deleted=job");
 }
 
-export async function generateCandidateAnalysis(formData: FormData) {
-  const prisma = getPrisma();
-  const candidateId = requiredString(formData, "candidateId");
-  const org = await getWorkspaceOrganization();
-  const candidate = await prisma.candidate.findFirst({
-    where: { id: candidateId, organizationId: org.id },
-    include: { applications: { include: { job: true } } },
-  });
+export async function generateCandidateAnalysis(
+  _previousState: EvaluationActionState,
+  formData: FormData,
+): Promise<EvaluationActionState> {
+  let candidateId = "";
+  let result: Awaited<ReturnType<typeof evaluateCandidateForJob>>;
 
-  if (!candidate) {
-    throw new Error("Candidate not found");
+  try {
+    const prisma = getPrisma();
+    candidateId = requiredString(formData, "candidateId");
+    const org = await getWorkspaceOrganization();
+    const candidate = await prisma.candidate.findFirst({
+      where: { id: candidateId, organizationId: org.id },
+      include: { applications: { include: { job: true } } },
+    });
+
+    if (!candidate) {
+      return createEvaluationErrorState("Candidate not found in the active workspace.");
+    }
+
+    const job =
+      candidate.applications[0]?.job ??
+      (await prisma.job.findFirst({
+        where: {
+          organizationId: org.id,
+          title: { contains: candidate.roleAppliedFor, mode: "insensitive" },
+        },
+      })) ??
+      (await prisma.job.findFirst({ where: { organizationId: org.id, status: "OPEN" } }));
+
+    if (!job) {
+      return createEvaluationErrorState("Create a job before generating candidate analysis.");
+    }
+
+    result = await evaluateCandidateForJob({
+      organizationId: org.id,
+      candidateId: candidate.id,
+      jobId: job.id,
+    });
+  } catch (error) {
+    return createEvaluationErrorState(safeEvaluationActionError(error));
   }
 
-  const job =
-    candidate.applications[0]?.job ??
-    (await prisma.job.findFirst({
-      where: {
-        organizationId: org.id,
-        title: { contains: candidate.roleAppliedFor, mode: "insensitive" },
-      },
-    })) ??
-    (await prisma.job.findFirst({ where: { organizationId: org.id, status: "OPEN" } }));
-
-  if (!job) {
-    throw new Error("Create a job before generating candidate analysis.");
-  }
-
-  await evaluateCandidateForJob({
-    organizationId: org.id,
-    candidateId: candidate.id,
-    jobId: job.id,
-  });
-
-  revalidatePath(`/candidates/${candidate.id}`);
+  revalidatePath(`/candidates/${candidateId}`);
   revalidatePath("/candidates");
   revalidatePath("/pipeline");
   revalidatePath("/analytics");
   revalidatePath("/dashboard");
   revalidatePath("/compare");
+
+  return createEvaluationSuccessState({
+    evaluationId: result.evaluationId,
+    source: result.source,
+  });
 }

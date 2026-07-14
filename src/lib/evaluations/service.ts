@@ -23,6 +23,12 @@ type EvaluateCandidateForJobInput = {
   jobId: string;
 };
 
+export type EvaluateCandidateForJobResult = {
+  evaluationId: string;
+  source: EvaluationSource;
+  usedFallback: boolean;
+};
+
 export class EvaluationOwnershipError extends Error {
   constructor(message: string) {
     super(message);
@@ -96,7 +102,7 @@ export async function evaluateCandidateForJob({
   organizationId,
   candidateId,
   jobId,
-}: EvaluateCandidateForJobInput) {
+}: EvaluateCandidateForJobInput): Promise<EvaluateCandidateForJobResult> {
   const prisma = getPrisma();
   const [candidate, job] = await Promise.all([
     prisma.candidate.findFirst({
@@ -266,20 +272,11 @@ export async function evaluateCandidateForJob({
       });
     });
 
-    return prisma.candidateEvaluation.findUniqueOrThrow({
-      where: { id: pendingEvaluation.id },
-      include: {
-        job: true,
-        categories: true,
-        requirementResults: {
-          include: {
-            requirement: true,
-            evidence: true,
-          },
-        },
-        evidence: true,
-      },
-    });
+    return {
+      evaluationId: pendingEvaluation.id,
+      source,
+      usedFallback: source !== EvaluationSource.HYBRID,
+    };
   } catch (error) {
     await prisma.candidateEvaluation.update({
       where: { id: pendingEvaluation.id },
