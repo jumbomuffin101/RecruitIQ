@@ -2,17 +2,18 @@ import {
   ActivityType,
   EvaluationSource,
   EvaluationStatus,
+  JobEvaluationRubric,
   Prisma,
   RequirementMatchStatus,
 } from "@prisma/client";
 import { analyzeCandidateForJobWithFallback } from "@/lib/ai";
-import { PROMPT_VERSION, SCORING_VERSION } from "@/lib/evaluations/constants";
+import { DEFAULT_RUBRIC_WEIGHTS, PROMPT_VERSION, SCORING_VERSION } from "@/lib/evaluations/constants";
 import { collectEvidence } from "@/lib/evaluations/evidence";
 import {
   calculateEvaluationScoreBreakdown,
   parseJobRequirementDrafts,
 } from "@/lib/evaluations/scoring";
-import type { RequirementForScoring } from "@/lib/evaluations/types";
+import type { RequirementForScoring, RubricWeights } from "@/lib/evaluations/types";
 import { getOpenRouterModelName } from "@/lib/openrouter";
 import { getPrisma } from "@/lib/prisma";
 import { getCandidateRecommendation } from "@/lib/recommendations";
@@ -43,6 +44,7 @@ function toRequirementForScoring(requirement: {
   category: RequirementForScoring["category"];
   weight: number;
   keywords: string[];
+  isCritical: boolean;
   sortOrder: number;
 }) {
   return {
@@ -52,14 +54,70 @@ function toRequirementForScoring(requirement: {
     category: requirement.category,
     weight: requirement.weight,
     keywords: requirement.keywords,
+    isCritical: requirement.isCritical,
     sortOrder: requirement.sortOrder,
   };
+}
+
+function rubricToWeights(rubric: JobEvaluationRubric | null | undefined): RubricWeights {
+  if (!rubric) return DEFAULT_RUBRIC_WEIGHTS;
+
+  return {
+    REQUIRED_SKILLS: rubric.requiredSkillsWeight,
+    PREFERRED_QUALIFICATIONS: rubric.preferredWeight,
+    RELEVANT_EXPERIENCE: rubric.experienceWeight,
+    PROJECT_ALIGNMENT: rubric.projectWeight,
+    EDUCATION: rubric.educationWeight,
+    DOMAIN_ALIGNMENT: rubric.domainWeight,
+  };
+}
+
+async function ensureJobRubric(jobId: string) {
+  const prisma = getPrisma();
+  const existing = await prisma.jobEvaluationRubric.findUnique({ where: { jobId } });
+  if (existing) return existing;
+
+  return prisma.jobEvaluationRubric.create({
+    data: {
+      jobId,
+      requiredSkillsWeight: DEFAULT_RUBRIC_WEIGHTS.REQUIRED_SKILLS,
+      preferredWeight: DEFAULT_RUBRIC_WEIGHTS.PREFERRED_QUALIFICATIONS,
+      experienceWeight: DEFAULT_RUBRIC_WEIGHTS.RELEVANT_EXPERIENCE,
+      projectWeight: DEFAULT_RUBRIC_WEIGHTS.PROJECT_ALIGNMENT,
+      educationWeight: DEFAULT_RUBRIC_WEIGHTS.EDUCATION,
+      domainWeight: DEFAULT_RUBRIC_WEIGHTS.DOMAIN_ALIGNMENT,
+    },
+  });
+}
+
+function buildRubricSnapshot({
+  rubric,
+  requirements,
+}: {
+  rubric: JobEvaluationRubric;
+  requirements: RequirementForScoring[];
+}) {
+  return {
+    scoringVersion: SCORING_VERSION,
+    rubricVersion: rubric.version,
+    categoryWeights: rubricToWeights(rubric),
+    requirements: requirements.map((requirement) => ({
+      id: requirement.id,
+      text: requirement.text,
+      type: requirement.type,
+      category: requirement.category,
+      weight: requirement.weight,
+      keywords: requirement.keywords,
+      isCritical: requirement.isCritical,
+      sortOrder: requirement.sortOrder,
+    })),
+  } satisfies Prisma.InputJsonObject;
 }
 
 async function ensureJobRequirements(job: { id: string; requirements: string }) {
   const prisma = getPrisma();
   const existing = await prisma.jobRequirement.findMany({
-    where: { jobId: job.id },
+    where: { jobId: job.id, deletedAt: null },
     orderBy: { sortOrder: "asc" },
   });
 
@@ -80,6 +138,7 @@ async function ensureJobRequirements(job: { id: string; requirements: string }) 
       category: draft.category,
       weight: draft.weight,
       keywords: draft.keywords,
+      isCritical: draft.isCritical,
       sortOrder: draft.sortOrder,
     })),
   });
@@ -123,6 +182,9 @@ export async function evaluateCandidateForJob({
   }
 
   const requirements = await ensureJobRequirements(job);
+  const rubric = await ensureJobRubric(job.id);
+  const rubricWeights = rubricToWeights(rubric);
+  const rubricSnapshot = buildRubricSnapshot({ rubric, requirements });
   const pendingEvaluation = await prisma.candidateEvaluation.create({
     data: {
       candidateId: candidate.id,
@@ -131,21 +193,27 @@ export async function evaluateCandidateForJob({
       status: EvaluationStatus.PENDING,
       scoringVersion: SCORING_VERSION,
       promptVersion: PROMPT_VERSION,
+      rubricSnapshot,
     },
   });
 
   try {
     const analysis = await analyzeCandidateForJobWithFallback(candidate, job);
-    const breakdown = calculateEvaluationScoreBreakdown({ candidate, job, requirements });
+    const breakdown = calculateEvaluationScoreBreakdown({ candidate, job, requirements, rubric: rubricWeights });
     const evidence = collectEvidence({
       resumeText: candidate.resumeText,
       requirements,
       scores: breakdown.requirementScores,
     });
     const recommendation = getCandidateRecommendation({
-      fitScore: analysis.fitScore,
+      fitScore: breakdown.overallScore,
       currentStatus: candidate.status,
     });
+    const recommendedStage =
+      breakdown.hasMissingCritical && ["INTERVIEW", "OFFER"].includes(recommendation.recommendedStage)
+        ? "SCREENED"
+        : recommendation.recommendedStage;
+    const nextStep = breakdown.hasMissingCritical ? "Recruiter review required" : recommendation.nextStep;
     const source = analysis.source === "openrouter" ? EvaluationSource.HYBRID : EvaluationSource.DETERMINISTIC;
     const modelName = analysis.source === "openrouter" ? getOpenRouterModelName() : null;
 
@@ -153,15 +221,16 @@ export async function evaluateCandidateForJob({
       await tx.candidateEvaluation.update({
         where: { id: pendingEvaluation.id },
         data: {
-          overallScore: analysis.fitScore,
+          overallScore: breakdown.overallScore,
           confidence: breakdown.confidence,
-          recommendation: recommendation.nextStep,
+          recommendation: nextStep,
           summary: analysis.summary,
           source,
           status: EvaluationStatus.COMPLETED,
           scoringVersion: SCORING_VERSION,
           promptVersion: PROMPT_VERSION,
           modelName,
+          rubricSnapshot,
           completedAt: new Date(),
         },
       });
@@ -190,6 +259,11 @@ export async function evaluateCandidateForJob({
             maxScore: score.maxScore,
             confidence: score.confidence,
             explanation: score.explanation,
+            requirementText: requirement.text,
+            requirementType: requirement.type,
+            requirementCategory: requirement.category,
+            requirementWeight: requirement.weight,
+            requirementIsCritical: requirement.isCritical,
           },
         });
         const matchedEvidence = evidence.find((item) => item.requirementId === score.requirementId);
@@ -213,13 +287,13 @@ export async function evaluateCandidateForJob({
         data: {
           candidateId: candidate.id,
           jobId: job.id,
-          fitScore: analysis.fitScore,
+          fitScore: breakdown.overallScore,
           summary: analysis.summary,
           roleMatch: analysis.roleMatch,
           strengths: analysis.strengths,
           gaps: analysis.gaps,
-          recommendedStage: analysis.recommendedStage,
-          nextStep: analysis.nextStep,
+          recommendedStage: recommendedStage,
+          nextStep,
           technicalQuestions: analysis.technicalQuestions,
           behavioralQuestions: analysis.behavioralQuestions,
           resumeSpecificQuestions: analysis.resumeSpecificQuestions,
@@ -238,7 +312,7 @@ export async function evaluateCandidateForJob({
 
       await tx.candidate.update({
         where: { id: candidate.id },
-        data: { status: analysis.recommendedStage },
+        data: { status: recommendedStage },
       });
 
       await tx.application.upsert({
@@ -247,12 +321,12 @@ export async function evaluateCandidateForJob({
           organizationId,
           candidateId: candidate.id,
           jobId: job.id,
-          status: analysis.recommendedStage,
-          fitScore: analysis.fitScore,
+          status: recommendedStage,
+          fitScore: breakdown.overallScore,
         },
         update: {
-          status: analysis.recommendedStage,
-          fitScore: analysis.fitScore,
+          status: recommendedStage,
+          fitScore: breakdown.overallScore,
         },
       });
 
@@ -265,8 +339,10 @@ export async function evaluateCandidateForJob({
             candidateId: candidate.id,
             jobId: job.id,
             evaluationId: pendingEvaluation.id,
-            fitScore: analysis.fitScore,
+            fitScore: breakdown.overallScore,
             source: analysis.source,
+            rubricVersion: rubric.version,
+            hasMissingCritical: breakdown.hasMissingCritical,
           } satisfies Prisma.InputJsonObject,
         },
       });

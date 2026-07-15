@@ -11,6 +11,7 @@ export type RequirementDraft = {
   category: RequirementCategory;
   weight: number;
   keywords: string[];
+  isCritical: boolean;
   sortOrder: number;
 };
 
@@ -58,8 +59,18 @@ export type CategoryScore = {
 export type EvaluationScoreBreakdown = {
   overallScore: number;
   confidence: number;
+  hasMissingCritical: boolean;
   categoryScores: CategoryScore[];
   requirementScores: RequirementScore[];
+};
+
+export type RubricWeights = {
+  REQUIRED_SKILLS: number;
+  PREFERRED_QUALIFICATIONS: number;
+  RELEVANT_EXPERIENCE: number;
+  PROJECT_ALIGNMENT: number;
+  EDUCATION: number;
+  DOMAIN_ALIGNMENT: number;
 };
 
 export type EvidenceMatch = {

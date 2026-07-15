@@ -4,7 +4,7 @@ import {
   RequirementMatchStatus,
   RequirementType,
 } from "@prisma/client";
-import { DEFAULT_REQUIREMENT_WEIGHTS } from "@/lib/evaluations/constants";
+import { DEFAULT_REQUIREMENT_WEIGHTS, DEFAULT_RUBRIC_WEIGHTS } from "@/lib/evaluations/constants";
 import type {
   CandidateForEvaluation,
   EvaluationScoreBreakdown,
@@ -12,6 +12,7 @@ import type {
   RequirementDraft,
   RequirementForScoring,
   RequirementScore,
+  RubricWeights,
 } from "@/lib/evaluations/types";
 import { clamp } from "@/lib/utils";
 
@@ -114,6 +115,7 @@ export function parseJobRequirementDrafts(requirements: string): RequirementDraf
       category: inferRequirementCategory(text),
       weight: type === RequirementType.REQUIRED ? DEFAULT_REQUIREMENT_WEIGHTS.required : DEFAULT_REQUIREMENT_WEIGHTS.preferred,
       keywords: extractRequirementKeywords(text),
+      isCritical: false,
       sortOrder: index,
     };
   });
@@ -137,11 +139,18 @@ function candidateSearchText(candidate: CandidateForEvaluation) {
   );
 }
 
-function scoreOneRequirement(requirement: RequirementForScoring, candidateText: string): RequirementScore {
+function scoreOneRequirement(
+  requirement: RequirementForScoring,
+  candidateText: string,
+  maxScore: number,
+): RequirementScore {
   const keywords = requirement.keywords.length ? requirement.keywords : extractRequirementKeywords(requirement.text);
   const matchedKeywords = keywords.filter((keyword) => normalize(candidateText).includes(normalize(keyword).trim()));
   const ratio = keywords.length ? matchedKeywords.length / keywords.length : 0;
-  const requiredPenalty = requirement.type === RequirementType.REQUIRED ? 0.5 : 0.65;
+  // Required requirements are intentionally stricter when partially matched.
+  // Preferred requirements add value when present but create a softer penalty
+  // when absent because they are not baseline qualifications.
+  const partialCreditMultiplier = requirement.type === RequirementType.REQUIRED ? 0.5 : 0.7;
   const status =
     ratio >= 0.7
       ? RequirementMatchStatus.MATCHED
@@ -150,28 +159,33 @@ function scoreOneRequirement(requirement: RequirementForScoring, candidateText: 
         : RequirementMatchStatus.MISSING;
   const score =
     status === RequirementMatchStatus.MATCHED
-      ? requirement.weight
+      ? maxScore
       : status === RequirementMatchStatus.PARTIAL
-        ? Math.round(requirement.weight * ratio * requiredPenalty)
+        ? Math.round(maxScore * ratio * partialCreditMultiplier)
         : 0;
 
   return {
     requirementId: requirement.id,
     status,
-    score,
-    maxScore: requirement.weight,
-    confidence: status === RequirementMatchStatus.MATCHED ? 0.86 : status === RequirementMatchStatus.PARTIAL ? 0.58 : 0.34,
+    score: Math.min(score, maxScore),
+    maxScore,
+    confidence:
+      requirement.isCritical && status === RequirementMatchStatus.MISSING
+        ? 0.2
+        : status === RequirementMatchStatus.MATCHED ? 0.86 : status === RequirementMatchStatus.PARTIAL ? 0.58 : 0.34,
     explanation:
       status === RequirementMatchStatus.MATCHED
         ? `Matched ${matchedKeywords.slice(0, 4).join(", ")}.`
         : status === RequirementMatchStatus.PARTIAL
           ? `Partially matched ${matchedKeywords.slice(0, 4).join(", ")}; needs validation.`
-          : "No direct resume evidence found for this requirement.",
+          : requirement.type === RequirementType.REQUIRED
+            ? "No supporting evidence found in the submitted resume for this required qualification."
+            : "No supporting evidence found in the submitted resume for this preferred qualification.",
     matchedKeywords,
   };
 }
 
-function scoreCategoryForRequirement(requirement: RequirementForScoring): EvaluationScoreCategory {
+export function scoreCategoryForRequirement(requirement: RequirementForScoring): EvaluationScoreCategory {
   if (requirement.type === RequirementType.PREFERRED) return EvaluationScoreCategory.PREFERRED_QUALIFICATIONS;
   if (requirement.category === RequirementCategory.EXPERIENCE) return EvaluationScoreCategory.RELEVANT_EXPERIENCE;
   if (requirement.category === RequirementCategory.PROJECT) return EvaluationScoreCategory.PROJECT_ALIGNMENT;
@@ -180,9 +194,39 @@ function scoreCategoryForRequirement(requirement: RequirementForScoring): Evalua
   return EvaluationScoreCategory.REQUIRED_SKILLS;
 }
 
+function getCategoryMaxScore(category: EvaluationScoreCategory, rubric: RubricWeights) {
+  return rubric[category];
+}
+
+export function normalizeRequirementMaxScores(requirements: RequirementForScoring[], rubric: RubricWeights) {
+  const grouped = new Map<EvaluationScoreCategory, RequirementForScoring[]>();
+  for (const requirement of requirements) {
+    const category = scoreCategoryForRequirement(requirement);
+    grouped.set(category, [...(grouped.get(category) ?? []), requirement]);
+  }
+
+  const maxScores = new Map<string, number>();
+  for (const [category, categoryRequirements] of grouped.entries()) {
+    const categoryMax = getCategoryMaxScore(category, rubric);
+    const totalWeight = categoryRequirements.reduce((total, requirement) => total + Math.max(0, requirement.weight), 0);
+    let allocated = 0;
+
+    categoryRequirements.forEach((requirement, index) => {
+      const isLast = index === categoryRequirements.length - 1;
+      const raw = totalWeight ? (Math.max(0, requirement.weight) / totalWeight) * categoryMax : categoryMax / categoryRequirements.length;
+      const maxScore = isLast ? Math.max(0, categoryMax - allocated) : Math.round(raw);
+      allocated += maxScore;
+      maxScores.set(requirement.id, maxScore);
+    });
+  }
+
+  return maxScores;
+}
+
 export function calculateCategoryScores(
   requirements: RequirementForScoring[],
   requirementScores: RequirementScore[],
+  rubric: RubricWeights = DEFAULT_RUBRIC_WEIGHTS,
 ) {
   const byRequirement = new Map(requirementScores.map((score) => [score.requirementId, score]));
   const grouped = new Map<EvaluationScoreCategory, { score: number; maxScore: number; weight: number; matched: number; total: number }>();
@@ -192,7 +236,7 @@ export function calculateCategoryScores(
     const score = byRequirement.get(requirement.id);
     const current = grouped.get(category) ?? { score: 0, maxScore: 0, weight: 0, matched: 0, total: 0 };
     current.score += score?.score ?? 0;
-    current.maxScore += score?.maxScore ?? requirement.weight;
+    current.maxScore = rubric[category];
     current.weight += requirement.weight;
     current.total += 1;
     if (score?.status === RequirementMatchStatus.MATCHED) current.matched += 1;
@@ -201,7 +245,7 @@ export function calculateCategoryScores(
 
   return Array.from(grouped.entries()).map(([category, value]) => ({
     category,
-    score: value.score,
+    score: Math.min(value.score, value.maxScore),
     maxScore: value.maxScore,
     weight: value.weight,
     explanation: `${value.matched} of ${value.total} requirements fully matched.`,
@@ -209,19 +253,20 @@ export function calculateCategoryScores(
 }
 
 export function calculateOverallScore(categoryScores: { score: number; maxScore: number }[]) {
-  const score = categoryScores.reduce((total, category) => total + category.score, 0);
-  const maxScore = categoryScores.reduce((total, category) => total + category.maxScore, 0);
-  return maxScore ? Math.round(clamp((score / maxScore) * 100, 0, 100)) : 0;
+  const score = categoryScores.reduce((total, category) => total + Math.min(category.score, category.maxScore), 0);
+  return Math.round(clamp(score, 0, 100));
 }
 
 export function calculateEvaluationScoreBreakdown({
   candidate,
   job,
   requirements,
+  rubric = DEFAULT_RUBRIC_WEIGHTS,
 }: {
   candidate: CandidateForEvaluation;
   job: JobForEvaluation;
   requirements: RequirementForScoring[];
+  rubric?: RubricWeights;
 }): EvaluationScoreBreakdown {
   const effectiveRequirements = requirements.length
     ? requirements
@@ -230,16 +275,24 @@ export function calculateEvaluationScoreBreakdown({
         id: `derived-${index}`,
       }));
   const candidateText = candidateSearchText(candidate);
-  const requirementScores = effectiveRequirements.map((requirement) => scoreOneRequirement(requirement, candidateText));
-  const categoryScores = calculateCategoryScores(effectiveRequirements, requirementScores);
+  const maxScores = normalizeRequirementMaxScores(effectiveRequirements, rubric);
+  const requirementScores = effectiveRequirements.map((requirement) =>
+    scoreOneRequirement(requirement, candidateText, maxScores.get(requirement.id) ?? requirement.weight),
+  );
+  const categoryScores = calculateCategoryScores(effectiveRequirements, requirementScores, rubric);
   const overallScore = calculateOverallScore(categoryScores);
+  const hasMissingCritical = requirementScores.some((score) => {
+    const requirement = effectiveRequirements.find((item) => item.id === score.requirementId);
+    return requirement?.isCritical && score.status === RequirementMatchStatus.MISSING;
+  });
   const confidence = requirementScores.length
-    ? Number((requirementScores.reduce((total, score) => total + score.confidence, 0) / requirementScores.length).toFixed(2))
+    ? Number(((requirementScores.reduce((total, score) => total + score.confidence, 0) / requirementScores.length) - (hasMissingCritical ? 0.15 : 0)).toFixed(2))
     : 0.4;
 
   return {
     overallScore,
-    confidence,
+    confidence: clamp(confidence, 0, 1),
+    hasMissingCritical,
     categoryScores,
     requirementScores,
   };

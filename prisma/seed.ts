@@ -80,8 +80,12 @@ async function main() {
         category: draft.category,
         weight: draft.weight,
         keywords: draft.keywords,
+        isCritical: draft.type === "REQUIRED" && draft.category === "SKILL",
         sortOrder: draft.sortOrder,
       })),
+    });
+    await prisma.jobEvaluationRubric.create({
+      data: { jobId: job.id },
     });
     requirementsByJobId.set(
       job.id,
@@ -220,6 +224,7 @@ async function main() {
         category: requirement.category,
         weight: requirement.weight,
         keywords: requirement.keywords,
+        isCritical: requirement.isCritical,
         sortOrder: requirement.sortOrder,
       }));
       const breakdown = calculateEvaluationScoreBreakdown({ candidate, job: input.job, requirements });

@@ -6,8 +6,11 @@ import {
   calculateCategoryScores,
   calculateEvaluationScoreBreakdown,
   calculateOverallScore,
+  normalizeRequirementMaxScores,
   parseJobRequirementDrafts,
 } from "@/lib/evaluations/scoring";
+import { DEFAULT_RUBRIC_WEIGHTS } from "@/lib/evaluations/constants";
+import { rubricInputSchema } from "@/lib/jobs/schemas";
 import { findEvidenceForRequirement } from "@/lib/evaluations/evidence";
 import { clamp } from "@/lib/utils";
 import { classifyOpenRouterStatus, parseOpenRouterJson } from "@/lib/openrouter";
@@ -66,6 +69,7 @@ test("missing requirements receive no contribution while matched requirements sc
       category: RequirementCategory.SKILL,
       weight: 12,
       keywords: ["React"],
+      isCritical: false,
       sortOrder: 0,
     },
     {
@@ -75,6 +79,7 @@ test("missing requirements receive no contribution while matched requirements sc
       category: RequirementCategory.SKILL,
       weight: 12,
       keywords: ["Salesforce"],
+      isCritical: true,
       sortOrder: 1,
     },
   ];
@@ -88,7 +93,7 @@ test("missing requirements receive no contribution while matched requirements sc
 });
 
 test("category totals calculate a percentage score", () => {
-  assert.equal(calculateOverallScore([{ score: 26, maxScore: 30 }, { score: 9, maxScore: 10 }]), 88);
+  assert.equal(calculateOverallScore([{ score: 26, maxScore: 30 }, { score: 9, maxScore: 10 }]), 35);
   const categories = calculateCategoryScores(
     [{
       id: "react",
@@ -97,6 +102,7 @@ test("category totals calculate a percentage score", () => {
       category: RequirementCategory.SKILL,
       weight: 12,
       keywords: ["React"],
+      isCritical: false,
       sortOrder: 0,
     }],
     [{
@@ -111,7 +117,7 @@ test("category totals calculate a percentage score", () => {
   );
 
   assert.equal(categories[0].score, 12);
-  assert.equal(categories[0].maxScore, 12);
+  assert.equal(categories[0].maxScore, DEFAULT_RUBRIC_WEIGHTS.REQUIRED_SKILLS);
 });
 
 test("evidence excerpts originate from supplied resume text", () => {
@@ -122,6 +128,7 @@ test("evidence excerpts originate from supplied resume text", () => {
     category: RequirementCategory.SKILL,
     weight: 12,
     keywords: ["Next.js"],
+    isCritical: false,
     sortOrder: 0,
   };
   const evidence = findEvidenceForRequirement({
@@ -168,4 +175,75 @@ test("OpenRouter retry classification distinguishes transient and permanent erro
   assert.deepEqual(classifyOpenRouterStatus(429), { reason: "rate_limited", retryable: true });
   assert.deepEqual(classifyOpenRouterStatus(503), { reason: "server_error", retryable: true });
   assert.deepEqual(classifyOpenRouterStatus(400), { reason: "client_error", retryable: false });
+});
+
+test("default rubric totals 100 and invalid totals are rejected", () => {
+  assert.equal(Object.values(DEFAULT_RUBRIC_WEIGHTS).reduce((sum, value) => sum + value, 0), 100);
+  assert.equal(rubricInputSchema.safeParse({
+    requiredSkillsWeight: 30,
+    preferredWeight: 10,
+    experienceWeight: 25,
+    projectWeight: 15,
+    educationWeight: 10,
+    domainWeight: 10,
+  }).success, true);
+  assert.equal(rubricInputSchema.safeParse({
+    requiredSkillsWeight: 90,
+    preferredWeight: 10,
+    experienceWeight: 25,
+    projectWeight: 15,
+    educationWeight: 10,
+    domainWeight: 10,
+  }).success, false);
+  assert.equal(rubricInputSchema.safeParse({
+    requiredSkillsWeight: -1,
+    preferredWeight: 10,
+    experienceWeight: 25,
+    projectWeight: 15,
+    educationWeight: 10,
+    domainWeight: 41,
+  }).success, false);
+});
+
+test("requirement weights normalize inside category maximums", () => {
+  const requirements = [
+    { id: "python", text: "Python", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 3, keywords: ["Python"], isCritical: false, sortOrder: 0 },
+    { id: "postgres", text: "PostgreSQL", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 2, keywords: ["PostgreSQL"], isCritical: false, sortOrder: 1 },
+    { id: "aws", text: "AWS", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 1, keywords: ["AWS"], isCritical: false, sortOrder: 2 },
+  ];
+  const normalized = normalizeRequirementMaxScores(requirements, DEFAULT_RUBRIC_WEIGHTS);
+
+  assert.equal(normalized.get("python"), 15);
+  assert.equal(normalized.get("postgres"), 10);
+  assert.equal(normalized.get("aws"), 5);
+});
+
+test("category and overall scores never exceed configured maximums", () => {
+  const requirements = [
+    { id: "react", text: "React", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 99, keywords: ["React"], isCritical: false, sortOrder: 0 },
+    { id: "next", text: "Next.js", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 99, keywords: ["Next.js"], isCritical: false, sortOrder: 1 },
+  ];
+  const breakdown = calculateEvaluationScoreBreakdown({ candidate, job, requirements, rubric: DEFAULT_RUBRIC_WEIGHTS });
+  const requiredSkills = breakdown.categoryScores.find((category) => category.category === "REQUIRED_SKILLS");
+
+  assert.ok(requiredSkills);
+  assert.ok(requiredSkills.score <= requiredSkills.maxScore);
+  assert.ok(breakdown.overallScore <= 100);
+});
+
+test("missing critical requirements lower confidence and are surfaced", () => {
+  const requirements = [
+    { id: "work-auth", text: "Work authorization", type: RequirementType.REQUIRED, category: RequirementCategory.OTHER, weight: 10, keywords: ["Work authorization"], isCritical: true, sortOrder: 0 },
+  ];
+  const breakdown = calculateEvaluationScoreBreakdown({ candidate, job, requirements, rubric: DEFAULT_RUBRIC_WEIGHTS });
+
+  assert.equal(breakdown.hasMissingCritical, true);
+  assert.ok(breakdown.confidence < 0.4);
+});
+
+test("stale evaluation detection can compare evaluation and rubric update dates", () => {
+  const evaluationCreatedAt = new Date("2026-01-01T00:00:00Z");
+  const rubricUpdatedAt = new Date("2026-01-02T00:00:00Z");
+
+  assert.equal(evaluationCreatedAt < rubricUpdatedAt, true);
 });

@@ -108,6 +108,12 @@ export default async function CandidateDetailPage({
           missing: latestEvaluation.requirementResults.filter((result) => result.status === "MISSING"),
         }
       : null;
+    const isEvaluationStale = latestEvaluation?.job.evaluationRubric
+      ? latestEvaluation.createdAt < latestEvaluation.job.evaluationRubric.updatedAt
+      : false;
+    const missingCriticalRequirements = latestEvaluation?.requirementResults.filter(
+      (result) => result.status === "MISSING" && result.requirementIsCritical,
+    ) ?? [];
 
     return (
       <>
@@ -346,6 +352,24 @@ export default async function CandidateDetailPage({
                     <p className="mt-2 text-sm leading-6 text-slate-600">{latestEvaluation.recommendation || "No recommendation recorded."}</p>
                   </div>
 
+                  {isEvaluationStale ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-sm font-semibold text-amber-950">Evaluation may be outdated</p>
+                      <p className="mt-2 text-sm leading-6 text-amber-900">This candidate was evaluated before the job rubric was last updated. Regenerate the evaluation to use the latest scoring criteria.</p>
+                    </div>
+                  ) : null}
+
+                  {missingCriticalRequirements.length ? (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                      <p className="text-sm font-semibold text-red-950">Critical gap</p>
+                      <ul className="mt-2 space-y-2 text-sm leading-6 text-red-900">
+                        {missingCriticalRequirements.map((result) => (
+                          <li key={result.id}>{result.requirementText || result.requirement.text}: no supporting evidence found in the submitted resume.</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
                   {latestEvaluation.categories.length ? (
                     <div>
                       <h3 className="text-sm font-semibold text-slate-950">Category breakdown</h3>
@@ -356,6 +380,7 @@ export default async function CandidateDetailPage({
                               <span className="font-semibold text-slate-800">{CATEGORY_SCORE_LABELS[category.category]}</span>
                               <span className="font-semibold text-slate-950">{category.score} / {category.maxScore}</span>
                             </div>
+                            <p className="mt-1 text-xs text-slate-500">Configured weight: {category.weight}%</p>
                             <div className="mt-2 h-2 rounded-full bg-white">
                               <div className="h-2 rounded-full bg-blue-600" style={{ width: `${category.maxScore ? Math.round((category.score / category.maxScore) * 100) : 0}%` }} />
                             </div>
@@ -367,22 +392,34 @@ export default async function CandidateDetailPage({
                   ) : null}
 
                   {requirementGroups ? (
-                    <div className="grid gap-3 lg:grid-cols-3">
-                      {[
-                        ["Matched", requirementGroups.matched, "bg-emerald-50 text-emerald-950"],
-                        ["Partial", requirementGroups.partial, "bg-amber-50 text-amber-950"],
-                        ["Missing", requirementGroups.missing, "bg-red-50 text-red-950"],
-                      ].map(([label, results, tone]) => (
-                        <div key={String(label)} className={`rounded-lg p-4 ${tone}`}>
-                          <h3 className="text-sm font-semibold">{String(label)} requirements</h3>
-                          <ul className="mt-3 space-y-2 text-sm leading-6">
-                            {(results as typeof latestEvaluation.requirementResults).slice(0, 4).map((result) => (
-                              <li key={result.id}>{result.requirement.text}</li>
-                            ))}
-                            {(results as typeof latestEvaluation.requirementResults).length === 0 ? <li>None recorded.</li> : null}
-                          </ul>
-                        </div>
-                      ))}
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">Requirement results</h3>
+                      <div className="mt-3 space-y-3">
+                        {latestEvaluation.requirementResults.map((result) => {
+                          const tone = result.status === "MATCHED"
+                            ? "border-emerald-100 bg-emerald-50 text-emerald-950"
+                            : result.status === "PARTIAL"
+                              ? "border-amber-100 bg-amber-50 text-amber-950"
+                              : result.requirementType === "REQUIRED"
+                                ? "border-red-100 bg-red-50 text-red-950"
+                                : "border-slate-200 bg-slate-50 text-slate-800";
+                          return (
+                            <div key={result.id} className={`rounded-lg border p-4 ${tone}`}>
+                              <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                                <span className="rounded-full bg-white/70 px-2.5 py-1">{formatEnum(result.status)}</span>
+                                <span className="rounded-full bg-white/70 px-2.5 py-1">{formatEnum(result.requirementType || result.requirement.type)}</span>
+                                <span className="rounded-full bg-white/70 px-2.5 py-1">{formatEnum(result.requirementCategory || result.requirement.category)}</span>
+                                {result.requirementIsCritical ? <span className="rounded-full bg-red-100 px-2.5 py-1 text-red-800">Critical</span> : null}
+                              </div>
+                              <p className="mt-3 text-sm font-semibold">{result.requirementText || result.requirement.text}</p>
+                              <p className="mt-2 text-sm leading-6">Score contribution: {result.score} / {result.maxScore}. {result.explanation}</p>
+                              {result.status === "MISSING" ? (
+                                <p className="mt-2 text-xs font-semibold">No supporting evidence found in the submitted resume.</p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : null}
 

@@ -31,6 +31,7 @@ Small recruiting teams often run hiring from spreadsheets, inboxes, and inconsis
 - Recruiter Copilot with deterministic fit score, AI-enhanced executive summary, role match, strengths, risks, next step, and interview kit
 - OpenRouter analysis with deterministic fallback when no key is configured or the provider is unavailable
 - Versioned structured evaluations with category scores, requirement-level results, and grounded resume evidence
+- Recruiter-configurable job requirements, required/preferred qualification type, critical requirement flags, and per-job scoring rubrics
 - Action Center with prioritized recruiter tasks and recent activity
 - Job-specific ranked candidate comparison
 - Kanban-style pipeline updates
@@ -63,6 +64,7 @@ The Prisma schema uses PostgreSQL-native features and remains portable to other 
 RecruitIQ now writes versioned `CandidateEvaluation` records alongside the existing `ResumeAnalysis` and `InterviewKit` rows. The legacy rows keep the current UI stable, while the structured evaluation tables provide the foundation for an explainable scoring engine.
 
 - `JobRequirement`: normalized requirements derived from a job's requirement text, including required/preferred type, category, weight, keywords, and order.
+- `JobEvaluationRubric`: per-job category weights for required skills, experience, projects, education, preferred qualifications, and domain alignment.
 - `CandidateEvaluation`: one immutable evaluation run for one candidate and one job, with status, source, score, recommendation, scoring version, prompt version, model name, and error summary.
 - `EvaluationCategoryScore`: category-level score breakdowns such as required skills, project alignment, education, domain alignment, and preferred qualifications.
 - `RequirementResult`: matched, partial, or missing result for each evaluated job requirement.
@@ -71,6 +73,49 @@ RecruitIQ now writes versioned `CandidateEvaluation` records alongside the exist
 The numerical score is deterministic. OpenRouter may improve the narrative summary, strengths, gaps, and interview kit, but it does not independently decide the final score or recommendation. If OpenRouter is missing, times out, returns invalid JSON, returns malformed schema output, or responds with a transient provider error, RecruitIQ falls back to deterministic analysis and keeps the workflow usable.
 
 Scoring and prompt versions are centralized in `src/lib/evaluations/constants.ts` and persisted with each evaluation. Prior evaluation versions are retained; regenerating analysis creates a new evaluation instead of overwriting history.
+
+### Structured Requirements and Rubrics
+
+Recruiters create and edit structured requirements from the job UI. Each requirement has text, required/preferred type, category, weight, optional keywords, order, and an optional critical flag. Requirements removed from the current rubric are soft-deleted so historical `RequirementResult` rows remain explainable.
+
+Category weights are configured per job and must total 100%. Defaults are:
+
+- Required Skills: 30
+- Relevant Experience: 25
+- Project Alignment: 15
+- Education: 10
+- Preferred Qualifications: 10
+- Domain Alignment: 10
+
+Individual requirement weights are normalized inside their category. They decide relative importance within the category, not the total score budget.
+
+Example:
+
+```text
+Required Skills category weight: 30
+
+Requirements:
+Python weight 3
+PostgreSQL weight 2
+AWS weight 1
+
+Normalized contributions:
+Python: 15
+PostgreSQL: 10
+AWS: 5
+
+Candidate:
+Python matched: 15
+PostgreSQL partial: 5
+AWS missing: 0
+
+Required Skills score:
+20 / 30
+```
+
+Required and preferred requirements are treated differently. Missing required qualifications receive stricter partial-credit behavior and clearer warnings. Preferred qualifications add value when found but are not treated as baseline failures when absent. A missing critical requirement lowers confidence and caps advancement-oriented recommendations to recruiter review; it does not force the score to zero.
+
+Every `CandidateEvaluation` stores a `rubricSnapshot` containing category weights, requirement IDs, text, type, category, weights, keywords, critical flags, order, and scoring version. This makes older evaluations explainable even after a recruiter changes the job rubric. Candidate detail pages show a stale-evaluation warning when a candidate was evaluated before the job rubric was updated.
 
 ## Tech Stack
 
@@ -90,7 +135,9 @@ Scoring and prompt versions are centralized in `src/lib/evaluations/constants.ts
 - `src/app/actions.ts`: trusted server mutations
 - `src/app/api/resume/parse/route.ts`: private PDF/TXT extraction route
 - `src/lib/resume-extract.ts`: deterministic and optional OpenRouter structured extraction
-- `src/lib/evaluations/*`: structured evaluation scoring, evidence, schemas, constants, and persistence service
+- `src/lib/evaluations/*`: structured evaluation scoring, evidence, schemas, constants, rubric normalization, and persistence service
+- `src/lib/jobs/schemas.ts`: Zod validation for job fields, requirements, and rubrics
+- `src/components/JobRubricForm.tsx`: structured job requirement and rubric editor
 - `src/components/CandidateIntakeForm.tsx`: two-step editable resume intake
 - `src/lib/ai.ts`: OpenRouter integration and deterministic fallback
 - `src/app/(app)/dashboard/page.tsx`: metrics and Action Center
@@ -159,7 +206,7 @@ Use `prisma db push` only for disposable local experiments.
 
 1. Open `/quick-start` for the guided product flow.
 2. Review the dashboard metrics and prioritized Action Center.
-3. Create a job or inspect the existing Northstar Labs roles.
+3. Create a job with structured requirements and a 100-point scoring rubric, or inspect the existing Northstar Labs roles.
 4. Upload a PDF or TXT resume from `/candidates`, extract structured details, and edit the profile before saving.
 5. Open the saved candidate and review the concise summary, education, experience, projects, and raw resume disclosure.
 6. Generate Recruiter Copilot analysis.
@@ -189,13 +236,13 @@ Use `prisma db push` only for disposable local experiments.
 - Email and calendar integrations
 - Durable resume storage when retention is required
 - Amazon Bedrock provider support
-- Candidate score history and configurable evaluation rubrics
+- Candidate score history, configurable evaluation rubrics, and stale evaluation warnings
 - Billing and plan management after product validation
 
 ## Known Limitations
 
 - Authentication and organization-level access control are not implemented yet.
-- Job and candidate editing are not implemented yet.
+- Candidate editing is not implemented yet.
 - The current resume evidence UI is excerpt-based; it does not highlight text inside a rendered resume.
 - PDF parsing works for text-based PDFs, not scanned image-only resumes.
 - The legacy `ResumeAnalysis` and `InterviewKit` models remain for compatibility while the structured evaluation model is adopted.

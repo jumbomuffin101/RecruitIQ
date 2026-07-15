@@ -102,21 +102,22 @@ model Organization {
 }
 
 model Job {
-  id              String                @id @default(cuid())
-  organizationId  String
-  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  title           String
-  department      String
-  location        String
-  type            JobType               @default(FULL_TIME)
-  description     String
-  requirements    String
-  status          JobStatus             @default(OPEN)
-  applications    Application[]
-  jobRequirements JobRequirement[]
-  evaluations     CandidateEvaluation[]
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id               String                @id @default(cuid())
+  organizationId   String
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title            String
+  department       String
+  location         String
+  type             JobType               @default(FULL_TIME)
+  description      String
+  requirements     String
+  status           JobStatus             @default(OPEN)
+  applications     Application[]
+  jobRequirements  JobRequirement[]
+  evaluationRubric JobEvaluationRubric?
+  evaluations      CandidateEvaluation[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 }
 
 model Candidate {
@@ -152,19 +153,37 @@ model Candidate {
 }
 
 model JobRequirement {
-  id        String              @id @default(cuid())
-  jobId     String
-  text      String
-  type      RequirementType
-  category  RequirementCategory
-  weight    Int
-  keywords  String[]
-  sortOrder Int                 @default(0)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  id         String              @id @default(cuid())
+  jobId      String
+  text       String
+  type       RequirementType
+  category   RequirementCategory
+  weight     Int
+  keywords   String[]
+  isCritical Boolean             @default(false)
+  sortOrder  Int                 @default(0)
+  deletedAt  DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
 
   job     Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
   results RequirementResult[]
+}
+
+model JobEvaluationRubric {
+  id                   String   @id @default(cuid())
+  jobId                String   @unique
+  requiredSkillsWeight Int      @default(30)
+  preferredWeight      Int      @default(10)
+  experienceWeight     Int      @default(25)
+  projectWeight        Int      @default(15)
+  educationWeight      Int      @default(10)
+  domainWeight         Int      @default(10)
+  version              Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 }
 
 model Application {
@@ -216,6 +235,7 @@ model CandidateEvaluation {
   promptVersion  String?
   modelName      String?
   errorMessage   String?
+  rubricSnapshot Json?
   createdAt      DateTime         @default(now())
   completedAt    DateTime?
 
@@ -243,15 +263,20 @@ model EvaluationCategoryScore {
 }
 
 model RequirementResult {
-  id            String                 @id @default(cuid())
-  evaluationId  String
-  requirementId String
-  status        RequirementMatchStatus
-  score         Int
-  maxScore      Int
-  confidence    Float?
-  explanation   String?
-  createdAt     DateTime               @default(now())
+  id                    String                 @id @default(cuid())
+  evaluationId          String
+  requirementId         String
+  status                RequirementMatchStatus
+  score                 Int
+  maxScore              Int
+  confidence            Float?
+  explanation           String?
+  requirementText       String?
+  requirementType       RequirementType?
+  requirementCategory   RequirementCategory?
+  requirementWeight     Int?
+  requirementIsCritical Boolean                @default(false)
+  createdAt             DateTime               @default(now())
 
   evaluation  CandidateEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   requirement JobRequirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)

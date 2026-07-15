@@ -3,8 +3,6 @@
 import {
   ActivityType,
   CandidateStatus,
-  JobStatus,
-  JobType,
   Prisma,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -16,7 +14,12 @@ import {
   type EvaluationActionState,
 } from "@/lib/evaluations/action-state";
 import { evaluateCandidateForJob } from "@/lib/evaluations/service";
-import { parseJobRequirementDrafts } from "@/lib/evaluations/scoring";
+import {
+  formatJobFormError,
+  getJobFormInput,
+  initialJobActionState,
+  type JobActionState,
+} from "@/lib/jobs/schemas";
 import { getPrisma } from "@/lib/prisma";
 import { extractResumeWithFallback } from "@/lib/resume-extract";
 
@@ -77,52 +80,184 @@ export async function parseResumeAction(formData: FormData) {
   }
 }
 
-export async function createJob(formData: FormData) {
+export async function createJob(_previousState: JobActionState, formData: FormData): Promise<JobActionState> {
   const prisma = getPrisma();
   const org = await getWorkspaceOrganization();
-  const requirements = requiredString(formData, "requirements");
+  let jobId = "";
 
-  await prisma.$transaction(async (tx) => {
-    const job = await tx.job.create({
-      data: {
-        organizationId: org.id,
-        title: requiredString(formData, "title"),
-        department: requiredString(formData, "department"),
-        location: requiredString(formData, "location"),
-        type: String(formData.get("type") ?? "FULL_TIME") as JobType,
-        description: requiredString(formData, "description"),
-        requirements,
-        status: String(formData.get("status") ?? "OPEN") as JobStatus,
-      },
-    });
+  try {
+    const input = getJobFormInput(formData);
+    const job = await prisma.$transaction(async (tx) => {
+      const createdJob = await tx.job.create({
+        data: {
+          organizationId: org.id,
+          title: input.title,
+          department: input.department,
+          location: input.location,
+          type: input.type,
+          description: input.description,
+          requirements: input.requirements,
+          status: input.status,
+        },
+      });
 
-    const requirementDrafts = parseJobRequirementDrafts(requirements);
-    if (requirementDrafts.length) {
       await tx.jobRequirement.createMany({
-        data: requirementDrafts.map((requirement) => ({
-          jobId: job.id,
+        data: input.structuredRequirements.map((requirement, index) => ({
+          jobId: createdJob.id,
           text: requirement.text,
           type: requirement.type,
           category: requirement.category,
           weight: requirement.weight,
           keywords: requirement.keywords,
-          sortOrder: requirement.sortOrder,
+          isCritical: requirement.isCritical,
+          sortOrder: index,
         })),
       });
-    }
 
-    await tx.activityLog.create({
-      data: {
-        organizationId: org.id,
-        type: ActivityType.JOB_CREATED,
-        message: "A new job was created.",
-      },
+      await tx.jobEvaluationRubric.create({
+        data: {
+          jobId: createdJob.id,
+          requiredSkillsWeight: input.rubric.requiredSkillsWeight,
+          preferredWeight: input.rubric.preferredWeight,
+          experienceWeight: input.rubric.experienceWeight,
+          projectWeight: input.rubric.projectWeight,
+          educationWeight: input.rubric.educationWeight,
+          domainWeight: input.rubric.domainWeight,
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          organizationId: org.id,
+          type: ActivityType.JOB_CREATED,
+          message: `${createdJob.title} was created with a structured evaluation rubric.`,
+        },
+      });
+
+      return createdJob;
     });
-  });
+    jobId = job.id;
+  } catch (error) {
+    return { status: "error", message: formatJobFormError(error) };
+  }
 
   revalidatePath("/jobs");
   revalidatePath("/dashboard");
-  redirect("/jobs");
+  redirect(`/jobs/${jobId}`);
+}
+
+export async function updateJob(_previousState: JobActionState, formData: FormData): Promise<JobActionState> {
+  const prisma = getPrisma();
+  const org = await getWorkspaceOrganization();
+  const jobId = requiredString(formData, "jobId");
+
+  try {
+    const input = getJobFormInput(formData);
+    const existingJob = await prisma.job.findFirst({
+      where: { id: jobId, organizationId: org.id },
+      include: { jobRequirements: true, evaluationRubric: true },
+    });
+
+    if (!existingJob) {
+      return { status: "error", message: "Job not found in the active workspace." };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.job.update({
+        where: { id: existingJob.id },
+        data: {
+          title: input.title,
+          department: input.department,
+          location: input.location,
+          type: input.type,
+          description: input.description,
+          requirements: input.requirements,
+          status: input.status,
+        },
+      });
+
+      const submittedIds = new Set(input.structuredRequirements.map((requirement) => requirement.id).filter(Boolean));
+      const activeExistingRequirements = existingJob.jobRequirements.filter((requirement) => !requirement.deletedAt);
+      const removedRequirements = activeExistingRequirements.filter((requirement) => !submittedIds.has(requirement.id));
+
+      if (removedRequirements.length) {
+        await tx.jobRequirement.updateMany({
+          where: { id: { in: removedRequirements.map((requirement) => requirement.id) }, jobId: existingJob.id },
+          data: { deletedAt: new Date() },
+        });
+      }
+
+      for (const [index, requirement] of input.structuredRequirements.entries()) {
+        if (requirement.id && activeExistingRequirements.some((existing) => existing.id === requirement.id)) {
+          await tx.jobRequirement.update({
+            where: { id: requirement.id },
+            data: {
+              text: requirement.text,
+              type: requirement.type,
+              category: requirement.category,
+              weight: requirement.weight,
+              keywords: requirement.keywords,
+              isCritical: requirement.isCritical,
+              sortOrder: index,
+              deletedAt: null,
+            },
+          });
+        } else {
+          await tx.jobRequirement.create({
+            data: {
+              jobId: existingJob.id,
+              text: requirement.text,
+              type: requirement.type,
+              category: requirement.category,
+              weight: requirement.weight,
+              keywords: requirement.keywords,
+              isCritical: requirement.isCritical,
+              sortOrder: index,
+            },
+          });
+        }
+      }
+
+      await tx.jobEvaluationRubric.upsert({
+        where: { jobId: existingJob.id },
+        create: {
+          jobId: existingJob.id,
+          requiredSkillsWeight: input.rubric.requiredSkillsWeight,
+          preferredWeight: input.rubric.preferredWeight,
+          experienceWeight: input.rubric.experienceWeight,
+          projectWeight: input.rubric.projectWeight,
+          educationWeight: input.rubric.educationWeight,
+          domainWeight: input.rubric.domainWeight,
+        },
+        update: {
+          requiredSkillsWeight: input.rubric.requiredSkillsWeight,
+          preferredWeight: input.rubric.preferredWeight,
+          experienceWeight: input.rubric.experienceWeight,
+          projectWeight: input.rubric.projectWeight,
+          educationWeight: input.rubric.educationWeight,
+          domainWeight: input.rubric.domainWeight,
+          version: { increment: 1 },
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          organizationId: org.id,
+          type: ActivityType.JOB_CREATED,
+          message: `${input.title} rubric and requirements were updated.`,
+          metadata: { jobId: existingJob.id },
+        },
+      });
+    });
+  } catch (error) {
+    return { status: "error", message: formatJobFormError(error) };
+  }
+
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/jobs");
+  revalidatePath("/compare");
+  revalidatePath("/dashboard");
+  return initialJobActionState;
 }
 
 export async function createCandidate(_previousState: CandidateFormState, formData: FormData): Promise<CandidateFormState> {

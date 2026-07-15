@@ -25,7 +25,11 @@ export async function getJobs() {
   const org = await getWorkspaceOrganization();
   return getPrisma().job.findMany({
     where: { organizationId: org.id },
-    include: { applications: true },
+    include: {
+      applications: true,
+      jobRequirements: { where: { deletedAt: null }, orderBy: { sortOrder: "asc" } },
+      evaluationRubric: true,
+    },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
 }
@@ -53,7 +57,7 @@ export async function getCandidateDetail(id: string) {
       evaluations: {
         orderBy: { createdAt: "desc" },
         include: {
-          job: true,
+          job: { include: { evaluationRubric: true } },
           categories: true,
           requirementResults: {
             include: {
@@ -184,6 +188,7 @@ export async function getCompareData(jobId?: string) {
         orderBy: { createdAt: "desc" },
         take: 1,
         include: {
+          categories: true,
           requirementResults: { include: { requirement: true } },
         },
       },
@@ -228,6 +233,13 @@ export async function getCompareData(jobId?: string) {
         recommendationDescription: recommendation.description,
         recommendationTone: recommendation.tone,
         scoreSource: structuredEvaluation ? "Persisted evaluation" : "Deterministic preview",
+        categoryScores: structuredEvaluation?.categories ?? [],
+        requirementResults: structuredEvaluation?.requirementResults ?? [],
+        isStale: structuredEvaluation
+          ? selectedJob.evaluationRubric
+            ? structuredEvaluation.createdAt < selectedJob.evaluationRubric.updatedAt
+            : false
+          : false,
       };
     })
     .sort((a, b) => b.fitScore - a.fitScore);
@@ -236,5 +248,7 @@ export async function getCompareData(jobId?: string) {
     jobs,
     selectedJob,
     rankedCandidates,
+    requirements: selectedJob.jobRequirements,
+    rubric: selectedJob.evaluationRubric,
   };
 }

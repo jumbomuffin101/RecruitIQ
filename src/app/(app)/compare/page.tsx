@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getCompareData } from "@/lib/data";
+import { CATEGORY_SCORE_LABELS } from "@/lib/evaluations/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,11 @@ export default async function ComparePage({
           <div className="mb-6 rounded-lg border border-blue-100 bg-blue-50 p-4">
             <p className="text-sm font-semibold text-blue-950">Current role: {data.selectedJob.title}</p>
             <p className="mt-1 text-sm leading-6 text-blue-900">{data.selectedJob.requirements}</p>
+            {data.rubric ? (
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+                Scoring based on rubric v{data.rubric.version}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -111,8 +117,19 @@ export default async function ComparePage({
                     <FitScoreBar score={candidate.fitScore} size="lg" />
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                       {candidate.scoreSource}
+                      {candidate.isStale ? " - may be outdated" : ""}
                     </p>
                   </div>
+                  {candidate.categoryScores.length ? (
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      {candidate.categoryScores.map((category) => (
+                        <div key={category.id} className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                          <p className="font-semibold text-slate-700">{CATEGORY_SCORE_LABELS[category.category]}</p>
+                          <p className="mt-1 font-bold text-slate-950">{category.score} / {category.maxScore}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rounded-lg bg-emerald-50 p-4">
@@ -146,6 +163,40 @@ export default async function ComparePage({
               </Link>
             </article>
           ))}
+          {data.requirements.length ? (
+            <section className="surface rounded-lg p-5">
+              <h2 className="text-lg font-semibold text-slate-950">Requirement matrix</h2>
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                    <tr>
+                      <th className="min-w-64 px-3 py-2">Requirement</th>
+                      {data.rankedCandidates.slice(0, 4).map((candidate) => (
+                        <th key={candidate.id} className="min-w-36 px-3 py-2">{candidate.name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.requirements.slice(0, 8).map((requirement) => (
+                      <tr key={requirement.id}>
+                        <td className="px-3 py-3 font-medium text-slate-800">{requirement.text}</td>
+                        {data.rankedCandidates.slice(0, 4).map((candidate) => {
+                          const result = candidate.requirementResults.find((item) => item.requirementId === requirement.id);
+                          return (
+                            <td key={candidate.id} className="px-3 py-3">
+                              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${result?.status === "MATCHED" ? "bg-emerald-50 text-emerald-700" : result?.status === "PARTIAL" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
+                                {result?.status ? result.status.toLowerCase() : "preview"}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
         </section> : (
           <EmptyState
             icon={Users}
