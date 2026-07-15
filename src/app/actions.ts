@@ -22,6 +22,12 @@ import {
 } from "@/lib/jobs/schemas";
 import { getPrisma } from "@/lib/prisma";
 import { extractResumeWithFallback } from "@/lib/resume-extract";
+import {
+  createInterviewScorecard,
+  getInterviewSignalForRating,
+  isSubstantiveInterviewResponse,
+  type InterviewScorecardActionState,
+} from "@/lib/interviews/scorecards";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -487,4 +493,115 @@ export async function generateCandidateAnalysis(
     evaluationId: result.evaluationId,
     source: result.source,
   });
+}
+
+export async function generateInterviewScorecard(
+  _previousState: InterviewScorecardActionState,
+  formData: FormData,
+): Promise<InterviewScorecardActionState> {
+  try {
+    const prisma = getPrisma();
+    const org = await getWorkspaceOrganization();
+    const candidateId = requiredString(formData, "candidateId");
+    const candidate = await prisma.candidate.findFirst({
+      where: { id: candidateId, organizationId: org.id },
+      include: {
+        evaluations: {
+          where: { status: "COMPLETED" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!candidate) return { status: "error", message: "Candidate not found in the active workspace." };
+    const evaluation = candidate.evaluations[0];
+    if (!evaluation) return { status: "error", message: "Generate a structured evaluation before creating an interview scorecard." };
+
+    const scorecard = await createInterviewScorecard({
+      candidateId: candidate.id,
+      jobId: evaluation.jobId,
+      evaluationId: evaluation.id,
+    });
+    revalidatePath(`/candidates/${candidateId}`);
+    return { status: "success", message: "Interview scorecard generated from the latest evaluation.", scorecardId: scorecard.id };
+  } catch (error) {
+    return { status: "error", message: safeEvaluationActionError(error) };
+  }
+}
+
+export async function saveInterviewScorecard(
+  _previousState: InterviewScorecardActionState,
+  formData: FormData,
+): Promise<InterviewScorecardActionState> {
+  try {
+    const prisma = getPrisma();
+    const org = await getWorkspaceOrganization();
+    const scorecardId = requiredString(formData, "scorecardId");
+    const intent = String(formData.get("intent") ?? "save");
+    const scorecard = await prisma.interviewScorecard.findFirst({
+      where: { id: scorecardId, candidate: { organizationId: org.id } },
+      include: { criteria: true },
+    });
+    if (!scorecard) return { status: "error", message: "Interview scorecard not found in the active workspace." };
+    if (scorecard.status === "COMPLETED") return { status: "error", message: "Completed scorecards are preserved as historical records and cannot be changed." };
+
+    let substantiveResponses = 0;
+    await prisma.$transaction(async (tx) => {
+      for (const criterion of scorecard.criteria) {
+        const ratingRaw = String(formData.get(`rating:${criterion.id}`) ?? "").trim();
+        const rating = ratingRaw ? Number(ratingRaw) : null;
+        if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
+          throw new Error("Interview ratings must be whole numbers from 1 to 5.");
+        }
+        const signalRaw = String(formData.get(`signal:${criterion.id}`) ?? "").trim();
+        const signal = signalRaw || getInterviewSignalForRating(rating);
+        if (signal && !["STRONG_NEGATIVE", "NEGATIVE", "NEUTRAL", "POSITIVE", "STRONG_POSITIVE"].includes(signal)) {
+          throw new Error("Interview signal is invalid.");
+        }
+        const notes = optionalString(formData, `notes:${criterion.id}`);
+        const evidence = optionalString(formData, `evidence:${criterion.id}`);
+        if ((notes?.length ?? 0) > 3_000 || (evidence?.length ?? 3_000) > 3_000) {
+          throw new Error("Interview notes and evidence must be 3,000 characters or fewer.");
+        }
+
+        const substantive = isSubstantiveInterviewResponse({
+          rating,
+          signal: signal as never,
+          notes,
+          evidence,
+        });
+        if (substantive) {
+          substantiveResponses += 1;
+          await tx.interviewResponse.upsert({
+            where: { scorecardId_criterionId: { scorecardId: scorecard.id, criterionId: criterion.id } },
+            create: { scorecardId: scorecard.id, criterionId: criterion.id, rating, signal: signal as never, notes, evidence },
+            update: { rating, signal: signal as never, notes, evidence },
+          });
+        } else {
+          await tx.interviewResponse.deleteMany({ where: { scorecardId: scorecard.id, criterionId: criterion.id } });
+        }
+      }
+
+      if (intent === "complete" && substantiveResponses === 0) {
+        throw new Error("Add at least one rating, signal, note, or observed evidence before completing this scorecard.");
+      }
+      await tx.interviewScorecard.update({
+        where: { id: scorecard.id },
+        data: {
+          status: intent === "complete" ? "COMPLETED" : substantiveResponses ? "IN_PROGRESS" : "DRAFT",
+          completedAt: intent === "complete" ? new Date() : null,
+        },
+      });
+    });
+
+    revalidatePath(`/candidates/${scorecard.candidateId}`);
+    return {
+      status: "success",
+      message: intent === "complete" ? "Scorecard completed and preserved as an interview record." : "Interview feedback saved.",
+      scorecardId,
+    };
+  } catch (error) {
+    return { status: "error", message: safeEvaluationActionError(error) };
+  }
 }

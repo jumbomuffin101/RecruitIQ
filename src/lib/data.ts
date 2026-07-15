@@ -54,6 +54,21 @@ export async function getCandidateDetail(id: string) {
       applications: { include: { job: true }, orderBy: { createdAt: "desc" } },
       resumeAnalyses: { orderBy: { createdAt: "desc" }, take: 1 },
       interviewKits: { orderBy: { createdAt: "desc" }, take: 1 },
+      interviewScorecards: {
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: {
+          job: true,
+          evaluation: { select: { id: true, overallScore: true, createdAt: true } },
+          criteria: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              requirementResult: { select: { id: true, status: true, requirementText: true } },
+              responses: { orderBy: { updatedAt: "desc" } },
+            },
+          },
+        },
+      },
       evaluations: {
         orderBy: { createdAt: "desc" },
         include: {

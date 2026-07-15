@@ -31,6 +31,8 @@ Small recruiting teams often run hiring from spreadsheets, inboxes, and inconsis
 - Recruiter Copilot with deterministic fit score, AI-enhanced executive summary, role match, strengths, risks, next step, and interview kit
 - OpenRouter analysis with deterministic fallback when no key is configured or the provider is unavailable
 - Versioned structured evaluations with category scores, requirement-level results, and grounded resume evidence
+- Versioned interview scorecards generated from evaluation snapshots, with requirement-linked questions, 1-5 ratings, interviewer signals, notes, and observed evidence
+- Resume-to-interview validation that highlights confirmed, weakened, and unresolved screening signals without changing the deterministic fit score
 - Recruiter-configurable job requirements, required/preferred qualification type, critical requirement flags, and per-job scoring rubrics
 - Action Center with prioritized recruiter tasks and recent activity
 - Job-specific ranked candidate comparison
@@ -69,6 +71,9 @@ RecruitIQ now writes versioned `CandidateEvaluation` records alongside the exist
 - `EvaluationCategoryScore`: category-level score breakdowns such as required skills, project alignment, education, domain alignment, and preferred qualifications.
 - `RequirementResult`: matched, partial, or missing result for each evaluated job requirement.
 - `EvaluationEvidence`: exact excerpts from stored resume text that support matched or partially matched requirements.
+- `InterviewScorecard`: a versioned, explicit human-feedback record for one candidate/job/evaluation combination.
+- `InterviewCriterion`: immutable requirement-linked interview prompts and evaluation guidance, including a requirement-text snapshot.
+- `InterviewResponse`: optional 1-5 rating, interviewer signal, notes, and observed evidence for a single criterion.
 
 The numerical score is deterministic. OpenRouter may improve the narrative summary, strengths, gaps, and interview kit, but it does not independently decide the final score or recommendation. If OpenRouter is missing, times out, returns invalid JSON, returns malformed schema output, or responds with a transient provider error, RecruitIQ falls back to deterministic analysis and keeps the workflow usable.
 
@@ -117,6 +122,12 @@ Required and preferred requirements are treated differently. Missing required qu
 
 Every `CandidateEvaluation` stores a `rubricSnapshot` containing category weights, requirement IDs, text, type, category, weights, keywords, critical flags, order, and scoring version. This makes older evaluations explainable even after a recruiter changes the job rubric. Candidate detail pages show a stale-evaluation warning when a candidate was evaluated before the job rubric was updated.
 
+### Interview Scorecards
+
+After an evaluation is complete, recruiters can generate a new interview scorecard. Each scorecard is tied to that evaluation and snapshots the relevant requirement text, screening result, prompt, and guidance. Generating another scorecard creates a new version rather than altering prior feedback.
+
+Interviewers may record a rating, signal, notes, and observed evidence for any criterion. Blank criteria remain incomplete, and completed scorecards are retained as historical records. RecruitIQ classifies the human feedback as confirmed, weakened, or unresolved screening evidence. This is decision support only: interview feedback does not mutate the deterministic fit score, pipeline stage, or make a hiring decision automatically.
+
 ## Tech Stack
 
 - Next.js App Router
@@ -136,6 +147,9 @@ Every `CandidateEvaluation` stores a `rubricSnapshot` containing category weight
 - `src/app/api/resume/parse/route.ts`: private PDF/TXT extraction route
 - `src/lib/resume-extract.ts`: deterministic and optional OpenRouter structured extraction
 - `src/lib/evaluations/*`: structured evaluation scoring, evidence, schemas, constants, rubric normalization, and persistence service
+- `src/lib/interviews/scorecards.ts`: scorecard generation, response helpers, and versioning logic
+- `src/lib/interviews/validation.ts`: resume-to-interview validation classification
+- `src/components/InterviewScorecardPanel.tsx`: interviewer feedback and validation UI
 - `src/lib/jobs/schemas.ts`: Zod validation for job fields, requirements, and rubrics
 - `src/components/JobRubricForm.tsx`: structured job requirement and rubric editor
 - `src/components/CandidateIntakeForm.tsx`: two-step editable resume intake
@@ -210,10 +224,11 @@ Use `prisma db push` only for disposable local experiments.
 4. Upload a PDF or TXT resume from `/candidates`, extract structured details, and edit the profile before saving.
 5. Open the saved candidate and review the concise summary, education, experience, projects, and raw resume disclosure.
 6. Generate Recruiter Copilot analysis.
-7. Show the deterministic fit score, structured evaluation breakdown, grounded resume evidence, risks, suggested next step, interview kit, and analysis source badge.
-8. Use `/compare` to rank applicants for a selected job.
-9. Move a candidate in `/pipeline` and finish with `/analytics`.
-10. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
+7. Generate an interview scorecard, capture interviewer evidence, and show how feedback confirms, weakens, or leaves screening signals unresolved.
+8. Show the deterministic fit score, structured evaluation breakdown, grounded resume evidence, risks, suggested next step, interview kit, and analysis source badge.
+9. Use `/compare` to rank applicants for a selected job.
+10. Move a candidate in `/pipeline` and finish with `/analytics`.
+11. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
 
 ## Challenges
 

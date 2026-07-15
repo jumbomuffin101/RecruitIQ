@@ -15,6 +15,7 @@ import { findEvidenceForRequirement } from "@/lib/evaluations/evidence";
 import { clamp } from "@/lib/utils";
 import { classifyOpenRouterStatus, parseOpenRouterJson } from "@/lib/openrouter";
 import { getCandidateRecommendation, getDeterministicRecommendedStage } from "@/lib/recommendations";
+import { getInterviewValidationOutcome, getValidationSummary } from "@/lib/interviews/validation";
 
 const candidate = {
   name: "Maya Chen",
@@ -246,4 +247,11 @@ test("stale evaluation detection can compare evaluation and rubric update dates"
   const rubricUpdatedAt = new Date("2026-01-02T00:00:00Z");
 
   assert.equal(evaluationCreatedAt < rubricUpdatedAt, true);
+});
+
+test("interview feedback validates resume screening without changing the fit score", () => {
+  assert.equal(getInterviewValidationOutcome({ screeningStatus: RequirementMatchStatus.MATCHED, rating: 5, signal: null }), "CONFIRMED");
+  assert.equal(getInterviewValidationOutcome({ screeningStatus: RequirementMatchStatus.PARTIAL, rating: 2, signal: null }), "WEAKENED");
+  assert.equal(getInterviewValidationOutcome({ screeningStatus: RequirementMatchStatus.MISSING, rating: null, signal: null }), "UNRESOLVED");
+  assert.deepEqual(getValidationSummary(["CONFIRMED", "WEAKENED", "UNRESOLVED"]), { confirmed: 1, weakened: 1, unresolved: 1 });
 });

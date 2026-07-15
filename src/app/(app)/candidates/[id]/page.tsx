@@ -7,6 +7,7 @@ import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { DeleteConfirmationButton } from "@/components/DeleteConfirmationButton";
 import { FitScoreBar } from "@/components/FitScoreBar";
 import { GenerateAnalysisForm } from "@/components/GenerateAnalysisForm";
+import { InterviewScorecardPanel } from "@/components/InterviewScorecardPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { CATEGORY_SCORE_LABELS } from "@/lib/evaluations/constants";
 import { formatEnum } from "@/lib/utils";
@@ -74,6 +75,7 @@ export default async function CandidateDetailPage({
     const evaluationHistory = candidate.evaluations.slice(0, 5);
     const analysis = candidate.resumeAnalyses[0];
     const kit = candidate.interviewKits[0];
+    const latestScorecard = candidate.interviewScorecards[0] ?? null;
     const application = candidate.applications[0];
     const jobText = `${application?.job.description ?? ""} ${application?.job.requirements ?? ""}`.toLowerCase();
     const matchedSkills = candidate.skills.filter((skill) => jobText.includes(skill.toLowerCase()));
@@ -311,6 +313,12 @@ export default async function CandidateDetailPage({
                 </div>
               )}
             </div>
+
+            <InterviewScorecardPanel
+              candidateId={candidate.id}
+              scorecard={latestScorecard}
+              hasEvaluation={Boolean(latestEvaluation && latestEvaluation.status === "COMPLETED")}
+            />
 
             <div className="surface rounded-lg p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

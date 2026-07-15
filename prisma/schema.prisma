@@ -78,6 +78,29 @@ enum RequirementMatchStatus {
   MISSING
 }
 
+enum InterviewScorecardStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum InterviewCriterionType {
+  REQUIREMENT_VALIDATION
+  TECHNICAL
+  BEHAVIORAL
+  EXPERIENCE
+  PROJECT
+  GENERAL
+}
+
+enum InterviewSignal {
+  STRONG_NEGATIVE
+  NEGATIVE
+  NEUTRAL
+  POSITIVE
+  STRONG_POSITIVE
+}
+
 model User {
   id             String        @id @default(cuid())
   email          String        @unique
@@ -102,52 +125,54 @@ model Organization {
 }
 
 model Job {
-  id               String                @id @default(cuid())
-  organizationId   String
-  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  title            String
-  department       String
-  location         String
-  type             JobType               @default(FULL_TIME)
-  description      String
-  requirements     String
-  status           JobStatus             @default(OPEN)
-  applications     Application[]
-  jobRequirements  JobRequirement[]
-  evaluationRubric JobEvaluationRubric?
-  evaluations      CandidateEvaluation[]
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  id                  String                @id @default(cuid())
+  organizationId      String
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title               String
+  department          String
+  location            String
+  type                JobType               @default(FULL_TIME)
+  description         String
+  requirements        String
+  status              JobStatus             @default(OPEN)
+  applications        Application[]
+  jobRequirements     JobRequirement[]
+  evaluationRubric    JobEvaluationRubric?
+  evaluations         CandidateEvaluation[]
+  interviewScorecards InterviewScorecard[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 }
 
 model Candidate {
-  id                String                @id @default(cuid())
-  organizationId    String
-  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name              String
-  email             String
-  phone             String?
-  location          String?
-  linkedinUrl       String?
-  githubUrl         String?
-  educationSummary  String?
-  currentTitle      String?
-  currentCompany    String?
-  projectsSummary   String?
-  yearsExperience   Float?
-  resumeSummary     String?
-  roleAppliedFor    String
-  resumeText        String
-  skills            String[]
-  experienceSummary String
-  status            CandidateStatus       @default(APPLIED)
-  notes             String?
-  applications      Application[]
-  resumeAnalyses    ResumeAnalysis[]
-  interviewKits     InterviewKit[]
-  evaluations       CandidateEvaluation[]
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
+  id                  String                @id @default(cuid())
+  organizationId      String
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                String
+  email               String
+  phone               String?
+  location            String?
+  linkedinUrl         String?
+  githubUrl           String?
+  educationSummary    String?
+  currentTitle        String?
+  currentCompany      String?
+  projectsSummary     String?
+  yearsExperience     Float?
+  resumeSummary       String?
+  roleAppliedFor      String
+  resumeText          String
+  skills              String[]
+  experienceSummary   String
+  status              CandidateStatus       @default(APPLIED)
+  notes               String?
+  applications        Application[]
+  resumeAnalyses      ResumeAnalysis[]
+  interviewKits       InterviewKit[]
+  evaluations         CandidateEvaluation[]
+  interviewScorecards InterviewScorecard[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
   @@unique([organizationId, email])
 }
@@ -239,11 +264,12 @@ model CandidateEvaluation {
   createdAt      DateTime         @default(now())
   completedAt    DateTime?
 
-  candidate          Candidate                 @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  job                Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  categories         EvaluationCategoryScore[]
-  requirementResults RequirementResult[]
-  evidence           EvaluationEvidence[]
+  candidate           Candidate                 @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job                 Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  categories          EvaluationCategoryScore[]
+  requirementResults  RequirementResult[]
+  evidence            EvaluationEvidence[]
+  interviewScorecards InterviewScorecard[]
 
   @@index([candidateId, jobId, createdAt])
   @@index([jobId, status, createdAt])
@@ -278,9 +304,10 @@ model RequirementResult {
   requirementIsCritical Boolean                @default(false)
   createdAt             DateTime               @default(now())
 
-  evaluation  CandidateEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
-  requirement JobRequirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)
-  evidence    EvaluationEvidence[]
+  evaluation        CandidateEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  requirement       JobRequirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  evidence          EvaluationEvidence[]
+  interviewCriteria InterviewCriterion[]
 
   @@index([evaluationId])
   @@index([requirementId])
@@ -312,6 +339,66 @@ model InterviewKit {
   questions   String[]
   focusAreas  String[]
   createdAt   DateTime  @default(now())
+}
+
+model InterviewScorecard {
+  id           String                   @id @default(cuid())
+  candidateId  String
+  jobId        String
+  evaluationId String?
+  status       InterviewScorecardStatus @default(DRAFT)
+  version      String
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  completedAt  DateTime?
+
+  candidate  Candidate            @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job        Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  evaluation CandidateEvaluation? @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
+  criteria   InterviewCriterion[]
+  responses  InterviewResponse[]
+
+  @@index([candidateId, jobId, createdAt])
+  @@index([evaluationId])
+}
+
+model InterviewCriterion {
+  id                  String                 @id @default(cuid())
+  scorecardId         String
+  requirementResultId String?
+  requirementText     String?
+  type                InterviewCriterionType
+  title               String
+  question            String
+  evaluationGuidance  String?
+  weight              Int
+  sortOrder           Int                    @default(0)
+  createdAt           DateTime               @default(now())
+
+  scorecard         InterviewScorecard  @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  requirementResult RequirementResult?  @relation(fields: [requirementResultId], references: [id], onDelete: SetNull)
+  responses         InterviewResponse[]
+
+  @@index([scorecardId, sortOrder])
+  @@index([requirementResultId])
+}
+
+model InterviewResponse {
+  id          String           @id @default(cuid())
+  scorecardId String
+  criterionId String
+  rating      Int?
+  signal      InterviewSignal?
+  notes       String?
+  evidence    String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  scorecard InterviewScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  criterion InterviewCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([scorecardId, criterionId])
+  @@index([criterionId])
 }
 
 model ActivityLog {
