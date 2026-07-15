@@ -1,5 +1,6 @@
 import {
   ActivityType,
+  ApplicationStatus,
   EvaluationSource,
   EvaluationStatus,
   JobEvaluationRubric,
@@ -207,7 +208,7 @@ export async function evaluateCandidateForJob({
     });
     const recommendation = getCandidateRecommendation({
       fitScore: breakdown.overallScore,
-      currentStatus: candidate.status,
+      currentStatus: candidate.applications.find((application) => application.jobId === job.id)?.status ?? ApplicationStatus.APPLIED,
     });
     const recommendedStage =
       breakdown.hasMissingCritical && ["INTERVIEW", "OFFER"].includes(recommendation.recommendedStage)
@@ -310,25 +311,23 @@ export async function evaluateCandidateForJob({
         },
       });
 
-      await tx.candidate.update({
-        where: { id: candidate.id },
-        data: { status: recommendedStage },
-      });
-
-      await tx.application.upsert({
-        where: { candidateId_jobId: { candidateId: candidate.id, jobId: job.id } },
-        create: {
+      const existingApplication = candidate.applications.find((application) => application.jobId === job.id);
+      if (existingApplication) {
+        await tx.application.update({ where: { id: existingApplication.id }, data: { fitScore: breakdown.overallScore } });
+      } else {
+        const application = await tx.application.create({
+          data: {
           organizationId,
           candidateId: candidate.id,
           jobId: job.id,
-          status: recommendedStage,
+          status: ApplicationStatus.APPLIED,
           fitScore: breakdown.overallScore,
         },
-        update: {
-          status: recommendedStage,
-          fitScore: breakdown.overallScore,
-        },
-      });
+        });
+        await tx.applicationStatusHistory.create({
+          data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created during job-specific evaluation." },
+        });
+      }
 
       await tx.activityLog.create({
         data: {

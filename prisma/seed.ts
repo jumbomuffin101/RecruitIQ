@@ -1,4 +1,4 @@
-import { PrismaClient, ActivityType, CandidateStatus, EvaluationSource, EvaluationStatus, JobStatus, JobType, RequirementMatchStatus } from "@prisma/client";
+import { PrismaClient, ActivityType, ApplicationStatus, CandidateStatus, EvaluationSource, EvaluationStatus, JobStatus, JobType, RequirementMatchStatus } from "@prisma/client";
 import { analyzeCandidateForJob } from "../src/lib/ai";
 import { PROMPT_VERSION, SCORING_VERSION } from "../src/lib/evaluations/constants";
 import { collectEvidence } from "../src/lib/evaluations/evidence";
@@ -206,16 +206,27 @@ async function main() {
         yearsExperience: yearsExperience[index],
         resumeSummary: `${input.experienceSummary} Core capabilities include ${input.skills.slice(0, 6).join(", ")}.`,
         roleAppliedFor: input.roleAppliedFor, skills: input.skills, experienceSummary: input.experienceSummary,
-        resumeText: input.resumeText, status: input.status, notes: input.notes,
+        resumeText: input.resumeText, status: CandidateStatus.APPLIED, notes: input.notes,
       },
     });
     const analysis = analyzeCandidateForJob(candidate, input.job);
-    await prisma.application.create({
+    const application = await prisma.application.create({
       data: {
-        organizationId: org.id, candidateId: candidate.id, jobId: input.job.id, status: input.status,
+        organizationId: org.id, candidateId: candidate.id, jobId: input.job.id, status: input.status as unknown as ApplicationStatus,
         fitScore: input.analyzed ? input.scoreOverride : null,
       },
     });
+    await prisma.applicationStatusHistory.create({
+      data: { applicationId: application.id, toStatus: input.status as unknown as ApplicationStatus, note: "Seeded application stage." },
+    });
+    if (input.name === "Noah Williams") {
+      const secondaryApplication = await prisma.application.create({
+        data: { organizationId: org.id, candidateId: candidate.id, jobId: jobs[3].id, status: ApplicationStatus.SCREENED, fitScore: 68 },
+      });
+      await prisma.applicationStatusHistory.create({
+        data: { applicationId: secondaryApplication.id, toStatus: ApplicationStatus.SCREENED, note: "Seeded multi-job application." },
+      });
+    }
     if (input.analyzed) {
       const requirements = (requirementsByJobId.get(input.job.id) ?? []).map((requirement) => ({
         id: requirement.id,

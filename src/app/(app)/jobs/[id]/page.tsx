@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BriefcaseBusiness, CircleAlert, MapPin, Users } from "lucide-react";
-import { deleteJob, updateJob } from "@/app/actions";
+import { deleteJob, updateApplicationStatus, updateJob } from "@/app/actions";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { DeleteConfirmationButton } from "@/components/DeleteConfirmationButton";
 import { JobRubricForm } from "@/components/JobRubricForm";
@@ -17,9 +17,10 @@ type JobDetail = Prisma.JobGetPayload<{
   include: {
     applications: {
       include: {
-        candidate: {
-          include: {
-            evaluations: true;
+            candidate: {
+              include: {
+                evaluations: true;
+                interviewScorecards: true;
           };
         };
       };
@@ -48,6 +49,11 @@ export default async function JobDetailPage({
               include: {
                 evaluations: {
                   where: { jobId: id, status: "COMPLETED" },
+                  orderBy: { createdAt: "desc" },
+                  take: 1,
+                },
+                interviewScorecards: {
+                  where: { jobId: id },
                   orderBy: { createdAt: "desc" },
                   take: 1,
                 },
@@ -168,19 +174,17 @@ export default async function JobDetailPage({
             {job.applications.length ? (
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {job.applications.map((application) => (
-                  <Link
-                    key={application.id}
-                    href={`/candidates/${application.candidate.id}`}
-                    className="rounded-lg border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50"
-                  >
-                    <p className="font-semibold text-slate-950">{application.candidate.name}</p>
+                  <div key={application.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                    <div className="flex items-start justify-between gap-3"><Link href={`/candidates/${application.candidate.id}?applicationId=${application.id}`} className="font-semibold text-slate-950 hover:underline">{application.candidate.name}</Link><StatusBadge status={application.status} /></div>
                     <p className="mt-1 text-sm text-slate-500">{application.candidate.email}</p>
                     {application.candidate.evaluations[0] ? (
                       <p className="mt-2 text-sm font-semibold text-blue-700">
                         Latest score {application.candidate.evaluations[0].overallScore ?? "Pending"} - {application.candidate.evaluations[0].recommendation ?? "No recommendation"}
                       </p>
                     ) : null}
-                  </Link>
+                    <p className="mt-2 text-xs font-semibold text-slate-500">Interview scorecard: {application.candidate.interviewScorecards[0] ? formatEnum(application.candidate.interviewScorecards[0].status) : "Not started"}</p>
+                    <form action={updateApplicationStatus} className="mt-3 flex gap-2"><input type="hidden" name="applicationId" value={application.id} /><select name="status" defaultValue={application.status} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">{["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"].map((status) => <option key={status} value={status}>{formatEnum(status)}</option>)}</select><button className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white">Update</button></form>
+                  </div>
                 ))}
               </div>
             ) : (

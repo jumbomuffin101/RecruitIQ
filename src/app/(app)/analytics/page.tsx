@@ -36,17 +36,18 @@ export default async function AnalyticsPage() {
         <PageHeader
           eyebrow="Hiring intelligence"
           title="Analytics"
-          description="Simple cards and charts for pipeline health, job status, fit score quality, and skill demand."
+          description="Application-aware pipeline health, conversion signals, job status, fit score quality, and skill demand."
         />
-        <section className="mb-6 grid gap-4 md:grid-cols-3">
-          <StatCard label="Average fit score" value={data.averageFitScore || "Pending"} detail="Across analyzed candidates" icon={BarChart3} />
-          <StatCard label="Tracked stages" value={data.stageCounts.length} detail="Applied through rejected" icon={BarChart3} />
-          <StatCard label="Top skills" value={data.topSkills.length} detail="Detected from candidate profiles" icon={BarChart3} />
+        <section className="mb-6 grid gap-4 md:grid-cols-4">
+          <StatCard label="Unique candidates" value={data.totalCandidates} detail="People represented in the workspace" icon={BarChart3} />
+          <StatCard label="Total applications" value={data.totalApplications} detail="Candidate and job relationships" icon={BarChart3} />
+          <StatCard label="Average fit score" value={data.averageFitScore || "Pending"} detail="Across evaluated applications" icon={BarChart3} />
+          <StatCard label="Rejection rate" value={`${data.conversions.rejectionRate}%`} detail="Across all applications" icon={BarChart3} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-3">
           <div className="surface rounded-lg p-5">
-            <h2 className="mb-5 text-lg font-semibold text-slate-950">Candidates by stage</h2>
+            <h2 className="mb-5 text-lg font-semibold text-slate-950">Applications by stage</h2>
             <div className="space-y-5">
               {data.stageCounts.map((item) => (
                 <BarRow key={item.stage} label={<StatusBadge status={item.stage} />} value={item.count} max={maxStage} />
@@ -59,6 +60,14 @@ export default async function AnalyticsPage() {
               {data.jobStatusCounts.map((item) => (
                 <BarRow key={item.status} label={<StatusBadge status={item.status} />} value={item.count} max={maxJobStatus} />
               ))}
+            </div>
+          </div>
+          <div className="surface rounded-lg p-5">
+            <h2 className="mb-5 text-lg font-semibold text-slate-950">Pipeline conversion</h2>
+            <div className="space-y-5 text-sm text-slate-700">
+              <BarRow label="Applied to Screened" value={data.conversions.appliedToScreened} max={100} />
+              <BarRow label="Screened to Interview" value={data.conversions.screenedToInterview} max={100} />
+              <BarRow label="Interview to Offer" value={data.conversions.interviewToOffer} max={100} />
             </div>
           </div>
           <div className="surface rounded-lg p-5">

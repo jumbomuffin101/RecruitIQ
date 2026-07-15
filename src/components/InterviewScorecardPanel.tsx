@@ -42,12 +42,13 @@ function ActionMessage({ state }: { state: InterviewScorecardActionState }) {
   );
 }
 
-function GenerateScorecard({ candidateId, disabled }: { candidateId: string; disabled: boolean }) {
+function GenerateScorecard({ candidateId, jobId, disabled }: { candidateId: string; jobId?: string; disabled: boolean }) {
   const [state, formAction, pending] = useActionState(generateInterviewScorecard, initialInterviewScorecardActionState);
   return (
     <div>
       <form action={formAction}>
         <input type="hidden" name="candidateId" value={candidateId} />
+        {jobId ? <input type="hidden" name="jobId" value={jobId} /> : null}
         <button disabled={disabled || pending} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
           {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
           Generate interview scorecard
@@ -58,7 +59,7 @@ function GenerateScorecard({ candidateId, disabled }: { candidateId: string; dis
   );
 }
 
-export function InterviewScorecardPanel({ candidateId, scorecard, hasEvaluation }: { candidateId: string; scorecard: Scorecard | null; hasEvaluation: boolean }) {
+export function InterviewScorecardPanel({ candidateId, jobId, scorecard, hasEvaluation }: { candidateId: string; jobId?: string; scorecard: Scorecard | null; hasEvaluation: boolean }) {
   const [state, formAction, pending] = useActionState(saveInterviewScorecard, initialInterviewScorecardActionState);
 
   if (!scorecard) {
@@ -69,7 +70,7 @@ export function InterviewScorecardPanel({ candidateId, scorecard, hasEvaluation 
             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950"><ClipboardCheck className="h-5 w-5 text-blue-700" />Interview scorecard</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Turn the resume evaluation into requirement-specific questions and an evidence-based interviewer feedback record.</p>
           </div>
-          <GenerateScorecard candidateId={candidateId} disabled={!hasEvaluation} />
+          <GenerateScorecard candidateId={candidateId} jobId={jobId} disabled={!hasEvaluation || !jobId} />
         </div>
         {!hasEvaluation ? <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Generate a structured evaluation first. Scorecards are always grounded in a specific evaluation version.</p> : null}
       </section>

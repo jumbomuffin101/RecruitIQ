@@ -29,6 +29,14 @@ enum CandidateStatus {
   REJECTED
 }
 
+enum ApplicationStatus {
+  APPLIED
+  SCREENED
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
 enum ActivityType {
   CANDIDATE_CREATED
   JOB_CREATED
@@ -212,19 +220,33 @@ model JobEvaluationRubric {
 }
 
 model Application {
-  id             String          @id @default(cuid())
+  id             String                     @id @default(cuid())
   organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   candidateId    String
-  candidate      Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate      Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   jobId          String
-  job            Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  status         CandidateStatus @default(APPLIED)
+  job            Job                        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status         ApplicationStatus          @default(APPLIED)
   fitScore       Int?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  statusHistory  ApplicationStatusHistory[]
 
   @@unique([candidateId, jobId])
+}
+
+model ApplicationStatusHistory {
+  id            String             @id @default(cuid())
+  applicationId String
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  changedAt     DateTime           @default(now())
+  note          String?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, changedAt])
 }
 
 model ResumeAnalysis {

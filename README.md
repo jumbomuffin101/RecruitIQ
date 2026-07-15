@@ -36,6 +36,7 @@ Small recruiting teams often run hiring from spreadsheets, inboxes, and inconsis
 - Recruiter-configurable job requirements, required/preferred qualification type, critical requirement flags, and per-job scoring rubrics
 - Action Center with prioritized recruiter tasks and recent activity
 - Job-specific ranked candidate comparison
+- Application-specific pipeline stages, append-only status history, and multi-job candidate workflows
 - Kanban-style pipeline updates
 - Hiring analytics for stages, fit scores, job status, and top skills
 - Quick Start workflow and screenshot-ready architecture page
@@ -128,6 +129,23 @@ After an evaluation is complete, recruiters can generate a new interview scoreca
 
 Interviewers may record a rating, signal, notes, and observed evidence for any criterion. Blank criteria remain incomplete, and completed scorecards are retained as historical records. RecruitIQ classifies the human feedback as confirmed, weakened, or unresolved screening evidence. This is decision support only: interview feedback does not mutate the deterministic fit score, pipeline stage, or make a hiring decision automatically.
 
+### Candidate Applications and Pipeline State
+
+Candidate profiles are global records: contact details, resume text, skills, and notes belong to the person. Pipeline state belongs to the `Application` relationship between that candidate and a specific job. `Application.status` is the source of truth for pipeline views, dashboard metrics, analytics, comparison context, and stage changes.
+
+`Candidate.status` remains only as a legacy compatibility field for existing records. RecruitIQ does not synchronize it after the application-aware migration.
+
+```text
+Candidate: Jane Doe
+
+Applications:
+Backend Engineer - Interview - Fit score: 84
+Platform Engineer - Screened - Fit score: 76
+Data Engineer - Rejected - Fit score: 61
+```
+
+Every application is created at `APPLIED` with an initial `ApplicationStatusHistory` row. Each stage update changes only that application and appends a history entry in the same transaction. Evaluations and interview scorecards remain scoped to their candidate/job pair.
+
 ## Tech Stack
 
 - Next.js App Router
@@ -150,6 +168,8 @@ Interviewers may record a rating, signal, notes, and observed evidence for any c
 - `src/lib/interviews/scorecards.ts`: scorecard generation, response helpers, and versioning logic
 - `src/lib/interviews/validation.ts`: resume-to-interview validation classification
 - `src/components/InterviewScorecardPanel.tsx`: interviewer feedback and validation UI
+- `src/lib/applications/*`: application stage schemas and application-aware metrics
+- `src/components/AddApplicationForm.tsx`: attach an existing candidate to another job
 - `src/lib/jobs/schemas.ts`: Zod validation for job fields, requirements, and rubrics
 - `src/components/JobRubricForm.tsx`: structured job requirement and rubric editor
 - `src/components/CandidateIntakeForm.tsx`: two-step editable resume intake
@@ -227,8 +247,10 @@ Use `prisma db push` only for disposable local experiments.
 7. Generate an interview scorecard, capture interviewer evidence, and show how feedback confirms, weakens, or leaves screening signals unresolved.
 8. Show the deterministic fit score, structured evaluation breakdown, grounded resume evidence, risks, suggested next step, interview kit, and analysis source badge.
 9. Use `/compare` to rank applicants for a selected job.
-10. Move a candidate in `/pipeline` and finish with `/analytics`.
-11. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
+10. Attach an existing candidate to a second job, then give each application an independent stage.
+11. Filter `/pipeline` by job and verify every card represents a candidate plus a specific application.
+12. Finish with `/analytics`, where total applications and stage counts are application-aware.
+13. Open `/architecture` to explain Vercel, Server Actions, Prisma, and Amazon Aurora PostgreSQL.
 
 ## Challenges
 

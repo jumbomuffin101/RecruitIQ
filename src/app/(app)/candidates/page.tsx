@@ -31,7 +31,7 @@ export default async function CandidatesPage({
           </div>
         ) : null}
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <CandidateIntakeForm jobTitles={jobs.map((job) => job.title)} />
+          <CandidateIntakeForm jobs={jobs.map((job) => ({ id: job.id, title: job.title, department: job.department }))} />
 
           <div>
             {candidates.length ? (

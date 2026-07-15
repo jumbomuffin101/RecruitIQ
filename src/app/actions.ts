@@ -2,7 +2,7 @@
 
 import {
   ActivityType,
-  CandidateStatus,
+  ApplicationStatus,
   Prisma,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -22,6 +22,7 @@ import {
 } from "@/lib/jobs/schemas";
 import { getPrisma } from "@/lib/prisma";
 import { extractResumeWithFallback } from "@/lib/resume-extract";
+import { createApplicationSchema, parseApplicationActionInput } from "@/lib/applications/schemas";
 import {
   createInterviewScorecard,
   getInterviewSignalForRating,
@@ -60,6 +61,9 @@ export type CandidateFormState = {
   error: string;
   duplicateEmail?: string;
 } | null;
+
+export type ApplicationActionState = { status: "idle" | "success" | "error"; message?: string };
+export const initialApplicationActionState: ApplicationActionState = { status: "idle" };
 
 function isPrismaKnownError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   return error instanceof Prisma.PrismaClientKnownRequestError;
@@ -269,7 +273,7 @@ export async function updateJob(_previousState: JobActionState, formData: FormDa
 export async function createCandidate(_previousState: CandidateFormState, formData: FormData): Promise<CandidateFormState> {
   const prisma = getPrisma();
   const org = await getWorkspaceOrganization();
-  const roleAppliedFor = requiredString(formData, "roleAppliedFor");
+  const jobId = requiredString(formData, "jobId");
   const experienceSummary = requiredString(formData, "experienceSummary");
   const resumeSummary = optionalString(formData, "resumeSummary") ?? experienceSummary;
   const resumeText = optionalString(formData, "resumeText") ?? resumeSummary;
@@ -278,6 +282,8 @@ export async function createCandidate(_previousState: CandidateFormState, formDa
 
   try {
     const candidate = await prisma.$transaction(async (tx) => {
+      const job = await tx.job.findFirst({ where: { id: jobId, organizationId: org.id }, select: { id: true, title: true } });
+      if (!job) throw new Error("Select an active job in the current workspace before saving this candidate.");
       const createdCandidate = await tx.candidate.create({
         data: {
           organizationId: org.id,
@@ -293,38 +299,26 @@ export async function createCandidate(_previousState: CandidateFormState, formDa
           projectsSummary: optionalString(formData, "projectsSummary"),
           yearsExperience: optionalFloat(formData, "yearsExperience"),
           resumeSummary,
-          roleAppliedFor,
+          roleAppliedFor: job.title,
           resumeText,
           skills: parseSkills(requiredString(formData, "skills")),
           experienceSummary,
-          status: String(formData.get("status") ?? "APPLIED") as CandidateStatus,
           notes: optionalString(formData, "notes"),
         },
       });
-
-      const matchingJob = await tx.job.findFirst({
-        where: {
-          organizationId: org.id,
-          title: { contains: roleAppliedFor, mode: "insensitive" },
-        },
+      const application = await tx.application.create({
+        data: { organizationId: org.id, candidateId: createdCandidate.id, jobId: job.id, status: ApplicationStatus.APPLIED },
       });
-
-      if (matchingJob) {
-        await tx.application.create({
-          data: {
-            organizationId: org.id,
-            candidateId: createdCandidate.id,
-            jobId: matchingJob.id,
-            status: createdCandidate.status,
-          },
-        });
-      }
+      await tx.applicationStatusHistory.create({
+        data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created." },
+      });
 
       await tx.activityLog.create({
         data: {
           organizationId: org.id,
           type: ActivityType.CANDIDATE_CREATED,
-          message: `${createdCandidate.name} was added to the pipeline.`,
+          message: `${createdCandidate.name} applied to ${job.title}.`,
+          metadata: { candidateId: createdCandidate.id, jobId: job.id, applicationId: application.id },
         },
       });
 
@@ -349,41 +343,72 @@ export async function createCandidate(_previousState: CandidateFormState, formDa
   redirect(`/candidates/${candidateId}`);
 }
 
-export async function updateCandidateStatus(formData: FormData) {
+export async function addCandidateToJob(
+  _previousState: ApplicationActionState,
+  formData: FormData,
+): Promise<ApplicationActionState> {
   const prisma = getPrisma();
-  const candidateId = requiredString(formData, "candidateId");
-  const status = String(formData.get("status") ?? "APPLIED") as CandidateStatus;
   const org = await getWorkspaceOrganization();
-
-  const existingCandidate = await prisma.candidate.findFirst({
-    where: { id: candidateId, organizationId: org.id },
-    select: { id: true },
-  });
-
-  if (!existingCandidate) {
-    throw new Error("Candidate not found in the active workspace.");
+  try {
+    const input = createApplicationSchema.parse({ candidateId: formData.get("candidateId"), jobId: formData.get("jobId") });
+    const result = await prisma.$transaction(async (tx) => {
+      const [candidate, job] = await Promise.all([
+        tx.candidate.findFirst({ where: { id: input.candidateId, organizationId: org.id }, select: { id: true, name: true } }),
+        tx.job.findFirst({ where: { id: input.jobId, organizationId: org.id }, select: { id: true, title: true } }),
+      ]);
+      if (!candidate || !job) throw new Error("Candidate or job was not found in the active workspace.");
+      const application = await tx.application.create({
+        data: { organizationId: org.id, candidateId: candidate.id, jobId: job.id, status: ApplicationStatus.APPLIED },
+      });
+      await tx.applicationStatusHistory.create({ data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created." } });
+      await tx.activityLog.create({
+        data: { organizationId: org.id, type: ActivityType.CANDIDATE_CREATED, message: `${candidate.name} applied to ${job.title}.`, metadata: { candidateId: candidate.id, jobId: job.id, applicationId: application.id } },
+      });
+      return application;
+    });
+    revalidatePath(`/candidates/${input.candidateId}`);
+    revalidatePath(`/jobs/${input.jobId}`);
+    revalidatePath("/pipeline");
+    revalidatePath("/dashboard");
+    revalidatePath("/analytics");
+    revalidatePath("/compare");
+    return { status: "success", message: "Candidate added to this job at the Applied stage." };
+  } catch (error) {
+    if (isPrismaKnownError(error) && error.code === "P2002") return { status: "error", message: "This candidate already has an application for the selected job." };
+    return { status: "error", message: safeEvaluationActionError(error) };
   }
+}
 
-  const candidate = await prisma.candidate.update({
-    where: { id: existingCandidate.id },
-    data: {
-      status,
-      applications: { updateMany: { where: { organizationId: org.id }, data: { status } } },
-    },
+export async function updateApplicationStatus(formData: FormData) {
+  const prisma = getPrisma();
+  const org = await getWorkspaceOrganization();
+  const input = parseApplicationActionInput(formData);
+  const application = await prisma.application.findFirst({
+    where: { id: input.applicationId, organizationId: org.id, candidate: { organizationId: org.id }, job: { organizationId: org.id } },
+    include: { candidate: { select: { name: true } }, job: { select: { title: true } } },
+  });
+  if (!application) throw new Error("Application not found in the active workspace.");
+  if (application.status === input.status) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.application.update({ where: { id: application.id }, data: { status: input.status } });
+    await tx.applicationStatusHistory.create({ data: { applicationId: application.id, fromStatus: application.status, toStatus: input.status, note: input.note } });
+    await tx.activityLog.create({
+      data: {
+        organizationId: org.id,
+        type: ActivityType.STATUS_CHANGED,
+        message: `${application.candidate.name} moved to ${input.status} for ${application.job.title}.`,
+        metadata: { candidateId: application.candidateId, jobId: application.jobId, applicationId: application.id, fromStatus: application.status, toStatus: input.status },
+      },
+    });
   });
 
-  await prisma.activityLog.create({
-    data: {
-      organizationId: org.id,
-      type: ActivityType.STATUS_CHANGED,
-      message: `${candidate.name} moved to ${status}.`,
-      metadata: { candidateId, status },
-    },
-  });
-
+  revalidatePath(`/candidates/${application.candidateId}`);
+  revalidatePath(`/jobs/${application.jobId}`);
   revalidatePath("/pipeline");
   revalidatePath("/dashboard");
-  revalidatePath(`/candidates/${candidateId}`);
+  revalidatePath("/analytics");
+  revalidatePath("/compare");
 }
 
 export async function deleteCandidate(formData: FormData) {
@@ -459,18 +484,13 @@ export async function generateCandidateAnalysis(
       return createEvaluationErrorState("Candidate not found in the active workspace.");
     }
 
-    const job =
-      candidate.applications[0]?.job ??
-      (await prisma.job.findFirst({
-        where: {
-          organizationId: org.id,
-          title: { contains: candidate.roleAppliedFor, mode: "insensitive" },
-        },
-      })) ??
-      (await prisma.job.findFirst({ where: { organizationId: org.id, status: "OPEN" } }));
+    const requestedJobId = optionalString(formData, "jobId");
+    const job = requestedJobId
+      ? candidate.applications.find((application) => application.jobId === requestedJobId)?.job
+      : candidate.applications[0]?.job;
 
     if (!job) {
-      return createEvaluationErrorState("Create a job before generating candidate analysis.");
+      return createEvaluationErrorState("Select one of this candidate's applications before generating analysis.");
     }
 
     result = await evaluateCandidateForJob({
@@ -503,11 +523,12 @@ export async function generateInterviewScorecard(
     const prisma = getPrisma();
     const org = await getWorkspaceOrganization();
     const candidateId = requiredString(formData, "candidateId");
+    const jobId = requiredString(formData, "jobId");
     const candidate = await prisma.candidate.findFirst({
       where: { id: candidateId, organizationId: org.id },
       include: {
         evaluations: {
-          where: { status: "COMPLETED" },
+          where: { status: "COMPLETED", jobId },
           orderBy: { createdAt: "desc" },
           take: 1,
         },
@@ -520,7 +541,7 @@ export async function generateInterviewScorecard(
 
     const scorecard = await createInterviewScorecard({
       candidateId: candidate.id,
-      jobId: evaluation.jobId,
+      jobId,
       evaluationId: evaluation.id,
     });
     revalidatePath(`/candidates/${candidateId}`);

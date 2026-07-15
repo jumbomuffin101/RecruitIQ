@@ -12,14 +12,11 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   try {
     const data = await getDashboardData();
-    const stageCounts = ["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"].map((stage) => ({
-      stage,
-      count: data.candidates.filter((candidate) => candidate.status === stage).length,
-    }));
+    const stageCounts = data.stageCounts;
     const maxStageCount = Math.max(...stageCounts.map((stage) => stage.count), 1);
     const actionItems = [
-      { label: "Needs review", value: data.actionCenter.candidatesNeedingReview, description: "New applicants awaiting triage", href: "/pipeline", icon: AlertCircle, tone: "bg-amber-50 text-amber-700" },
-      { label: "Ready for interview", value: data.actionCenter.highFitCandidates, description: "High-fit candidates in early stages", href: "/compare", icon: UserCheck, tone: "bg-emerald-50 text-emerald-700" },
+      { label: "Needs review", value: data.actionCenter.applicationsNeedingReview, description: "New applications awaiting triage", href: "/pipeline", icon: AlertCircle, tone: "bg-amber-50 text-amber-700" },
+      { label: "Ready for interview", value: data.actionCenter.highFitApplications, description: "High-fit applications in early stages", href: "/compare", icon: UserCheck, tone: "bg-emerald-50 text-emerald-700" },
       { label: "Low pipeline volume", value: data.actionCenter.jobsWithLowPipeline, description: "Open jobs with fewer than 3 applicants", href: "/jobs", icon: BriefcaseBusiness, tone: "bg-blue-50 text-blue-700" },
       { label: "Missing analysis", value: data.actionCenter.candidatesMissingAnalysis, description: "Profiles that need Copilot review", href: "/candidates", icon: Sparkles, tone: "bg-violet-50 text-violet-700" },
     ];
@@ -29,7 +26,7 @@ export default async function DashboardPage() {
         <PageHeader
           eyebrow="Command center"
           title="Hiring dashboard"
-          description="Track open roles, candidate volume, interview activity, and fit scores across your lean hiring team."
+          description="Track open roles, application volume, interview-stage activity, and fit scores across your hiring team."
           action={
             <Link href="/compare" className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
               <Scale className="h-4 w-4" />
@@ -39,14 +36,14 @@ export default async function DashboardPage() {
         />
         {data.candidates.length > 0 ? (
           <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
-            Northstar Labs sample workspace is active with {data.jobs.length} jobs and {data.candidates.length} candidates.
+            Northstar Labs sample workspace is active with {data.jobs.length} jobs, {data.totalCandidates} candidates, and {data.totalApplications} applications.
           </div>
         ) : null}
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Open jobs" value={data.openJobs} detail="Active roles accepting candidates" icon={BriefcaseBusiness} accent="emerald" />
-          <StatCard label="Total candidates" value={data.totalCandidates} detail="Across every pipeline stage" icon={Users} accent="blue" />
-          <StatCard label="Interviews scheduled" value={data.interviewsScheduled} detail="Candidates currently in interview" icon={CalendarCheck} accent="violet" />
-          <StatCard label="Average fit score" value={data.averageFitScore || "Pending"} detail="From generated AI analysis" icon={BarChart3} accent="amber" />
+          <StatCard label="Unique candidates" value={data.totalCandidates} detail="People in the talent workspace" icon={Users} accent="blue" />
+          <StatCard label="Applications in Interview" value={data.applicationsInInterview} detail="No calendar scheduling implied" icon={CalendarCheck} accent="violet" />
+          <StatCard label="Total applications" value={data.totalApplications} detail="Candidate and job relationships" icon={BarChart3} accent="amber" />
         </section>
 
         <section className="mt-8">

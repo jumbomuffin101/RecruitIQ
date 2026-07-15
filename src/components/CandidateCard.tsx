@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Mail, MapPin } from "lucide-react";
 import { CandidateAvatar } from "@/components/CandidateAvatar";
 import { FitScoreBar } from "@/components/FitScoreBar";
-import { StatusBadge } from "@/components/StatusBadge";
 
 type CandidateCardProps = {
   candidate: {
@@ -12,9 +11,8 @@ type CandidateCardProps = {
     location: string | null;
     roleAppliedFor: string;
     skills: string[];
-    status: string;
     resumeAnalyses?: { fitScore: number }[];
-    applications?: { fitScore: number | null }[];
+    applications?: { fitScore: number | null; jobId: string }[];
   };
 };
 
@@ -35,7 +33,9 @@ export function CandidateCard({ candidate }: CandidateCardProps) {
             <p className="mt-1 truncate text-sm text-slate-500">{candidate.roleAppliedFor}</p>
           </div>
         </div>
-        <StatusBadge status={candidate.status} />
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+          {candidate.applications?.length ?? 0} applications
+        </span>
       </div>
       <div className="mt-4 space-y-2 text-sm text-slate-500">
         <p className="flex items-center gap-2">

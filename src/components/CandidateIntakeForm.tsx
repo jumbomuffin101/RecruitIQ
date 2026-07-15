@@ -30,7 +30,7 @@ function SaveCandidateButton() {
   );
 }
 
-export function CandidateIntakeForm({ jobTitles }: { jobTitles: string[] }) {
+export function CandidateIntakeForm({ jobs }: { jobs: Array<{ id: string; title: string; department: string }> }) {
   const [step, setStep] = useState<"resume" | "review">("resume");
   const [resumeText, setResumeText] = useState("");
   const [details, setDetails] = useState<ResumeExtraction>(emptyExtraction);
@@ -126,7 +126,7 @@ export function CandidateIntakeForm({ jobTitles }: { jobTitles: string[] }) {
         <label className="text-sm font-semibold text-slate-700">Most recent title<input name="currentTitle" value={details.currentTitle} onChange={(event) => update("currentTitle", event.target.value)} className={`${fieldClass} mt-2`} /></label>
         <label className="text-sm font-semibold text-slate-700">Most recent company<input name="currentCompany" value={details.currentCompany} onChange={(event) => update("currentCompany", event.target.value)} className={`${fieldClass} mt-2`} /></label>
         <label className="text-sm font-semibold text-slate-700">Years of experience<input name="yearsExperience" type="number" min="0" max="40" step="0.5" value={details.yearsExperience ?? ""} onChange={(event) => update("yearsExperience", event.target.value ? Number(event.target.value) : null)} className={`${fieldClass} mt-2`} /></label>
-        <label className="text-sm font-semibold text-slate-700">Role applied for<input name="roleAppliedFor" required list="job-titles" defaultValue={details.currentTitle} className={`${fieldClass} mt-2`} /><datalist id="job-titles">{jobTitles.map((title) => <option key={title} value={title} />)}</datalist></label>
+        <label className="text-sm font-semibold text-slate-700">Apply to job<select name="jobId" required defaultValue="" className={`${fieldClass} mt-2`}><option value="" disabled>Select a job</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title} - {job.department}</option>)}</select></label>
       </div>
 
       <div className="mt-4 grid gap-4">
@@ -135,10 +135,7 @@ export function CandidateIntakeForm({ jobTitles }: { jobTitles: string[] }) {
         <label className="text-sm font-semibold text-slate-700">Experience summary<textarea name="experienceSummary" required rows={4} value={details.experienceSummary} onChange={(event) => update("experienceSummary", event.target.value)} className={`${fieldClass} mt-2 leading-6`} /></label>
         <label className="text-sm font-semibold text-slate-700">Education summary<textarea name="educationSummary" rows={3} value={details.educationSummary} onChange={(event) => update("educationSummary", event.target.value)} className={`${fieldClass} mt-2 leading-6`} /></label>
         <label className="text-sm font-semibold text-slate-700">Project highlights<textarea name="projectsSummary" rows={3} value={details.projectsSummary} onChange={(event) => update("projectsSummary", event.target.value)} className={`${fieldClass} mt-2 leading-6`} /></label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold text-slate-700">Starting stage<select name="status" defaultValue="APPLIED" className={`${fieldClass} mt-2`}><option value="APPLIED">Applied</option><option value="SCREENED">Screened</option><option value="INTERVIEW">Interview</option><option value="OFFER">Offer</option><option value="REJECTED">Rejected</option></select></label>
-          <label className="text-sm font-semibold text-slate-700">Recruiter notes<textarea name="notes" rows={2} className={`${fieldClass} mt-2`} /></label>
-        </div>
+        <label className="text-sm font-semibold text-slate-700">Recruiter notes<textarea name="notes" rows={2} className={`${fieldClass} mt-2`} /></label>
       </div>
       <SaveCandidateButton />
     </form>

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, BriefcaseBusiness, CheckCircle2, CircleAlert, ExternalLink, FileSearch, FolderKanban, GraduationCap, ListChecks, Mail, MapPin, MessageSquareText, Phone, Target, UsersRound, Wrench } from "lucide-react";
-import { deleteCandidate, updateCandidateStatus } from "@/app/actions";
+import { deleteCandidate, updateApplicationStatus } from "@/app/actions";
+import { AddApplicationForm } from "@/components/AddApplicationForm";
 import { CandidateAvatar } from "@/components/CandidateAvatar";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { DeleteConfirmationButton } from "@/components/DeleteConfirmationButton";
@@ -9,9 +10,10 @@ import { FitScoreBar } from "@/components/FitScoreBar";
 import { GenerateAnalysisForm } from "@/components/GenerateAnalysisForm";
 import { InterviewScorecardPanel } from "@/components/InterviewScorecardPanel";
 import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
 import { CATEGORY_SCORE_LABELS } from "@/lib/evaluations/constants";
 import { formatEnum } from "@/lib/utils";
-import { getCandidateDetail } from "@/lib/data";
+import { getCandidateDetail, getJobs } from "@/lib/data";
 import { type CandidateStage, getCandidateRecommendation } from "@/lib/recommendations";
 
 export const dynamic = "force-dynamic";
@@ -57,8 +59,10 @@ export default async function CandidateDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ applicationId?: string }>;
 }) {
   const { id } = await params;
+  const { applicationId } = await searchParams;
   let candidate: Awaited<ReturnType<typeof getCandidateDetail>>;
 
   try {
@@ -71,12 +75,15 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-    const latestEvaluation = candidate.evaluations.find((evaluation) => evaluation.status === "COMPLETED") ?? candidate.evaluations[0];
-    const evaluationHistory = candidate.evaluations.slice(0, 5);
-    const analysis = candidate.resumeAnalyses[0];
-    const kit = candidate.interviewKits[0];
-    const latestScorecard = candidate.interviewScorecards[0] ?? null;
-    const application = candidate.applications[0];
+    const availableJobs = (await getJobs()).filter((job) => !candidate.applications.some((item) => item.jobId === job.id));
+
+    const application = candidate.applications.find((item) => item.id === applicationId) ?? candidate.applications[0];
+    const selectedJobId = application?.jobId;
+    const latestEvaluation = candidate.evaluations.find((evaluation) => evaluation.jobId === selectedJobId && evaluation.status === "COMPLETED") ?? candidate.evaluations.find((evaluation) => evaluation.jobId === selectedJobId);
+    const evaluationHistory = candidate.evaluations.filter((evaluation) => evaluation.jobId === selectedJobId).slice(0, 5);
+    const analysis = candidate.resumeAnalyses.find((item) => item.jobId === selectedJobId);
+    const kit = candidate.interviewKits.find((item) => item.jobId === selectedJobId);
+    const latestScorecard = candidate.interviewScorecards.find((item) => item.jobId === selectedJobId) ?? null;
     const jobText = `${application?.job.description ?? ""} ${application?.job.requirements ?? ""}`.toLowerCase();
     const matchedSkills = candidate.skills.filter((skill) => jobText.includes(skill.toLowerCase()));
     const technicalQuestions = analysis?.technicalQuestions?.length
@@ -92,12 +99,12 @@ export default async function CandidateDetailPage({
     const recommendation = analysis
       ? getCandidateRecommendation({
           fitScore: analysis.fitScore,
-          currentStatus: candidate.status,
+          currentStatus: application?.status ?? "APPLIED",
         })
       : null;
     const recommendationStage: CandidateStage = recommendation?.recommendedStage ?? "APPLIED";
     const recommendationStyles = recommendationStageStyles[recommendationStage];
-    const recommendationActionLabel = getRecommendationActionLabel(recommendationStage, candidate.status as CandidateStage);
+    const recommendationActionLabel = getRecommendationActionLabel(recommendationStage, (application?.status ?? "APPLIED") as CandidateStage);
     const questionGroups = [
       { title: "Technical", questions: technicalQuestions, icon: Wrench, tone: "bg-blue-50 text-blue-950" },
       { title: "Behavioral", questions: behavioralQuestions, icon: UsersRound, tone: "bg-emerald-50 text-emerald-950" },
@@ -155,7 +162,7 @@ export default async function CandidateDetailPage({
                 description="Are you sure you want to delete this candidate? This action cannot be undone."
                 confirmLabel="Delete Candidate"
               />
-              <GenerateAnalysisForm candidateId={candidate.id} hasAnalysis={Boolean(analysis)} />
+              <GenerateAnalysisForm candidateId={candidate.id} jobId={selectedJobId} hasAnalysis={Boolean(analysis)} />
             </div>
           </div>
         </div>
@@ -199,20 +206,33 @@ export default async function CandidateDetailPage({
               </div>
             </div>
 
-            <form action={updateCandidateStatus} className="surface rounded-lg p-5">
-              <input type="hidden" name="candidateId" value={candidate.id} />
-              <h2 className="text-lg font-semibold text-slate-950">Pipeline stage</h2>
-              <select name="status" defaultValue={candidate.status} className="focus-ring mt-4 w-full rounded-lg border border-slate-200 px-3 py-2">
-                {statuses.map((status) => (
-                  <option key={status} value={status}>
-                    {formatEnum(status)}
-                  </option>
-                ))}
-              </select>
-              <button className="mt-3 w-full rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
-                Update status
-              </button>
-            </form>
+            <div className="surface rounded-lg p-5">
+              <h2 className="text-lg font-semibold text-slate-950">Applications</h2>
+              <p className="mt-1 text-sm text-slate-500">Each job has its own stage, evaluation, and interview record.</p>
+              <div className="mt-4 space-y-3">
+                {candidate.applications.map((item) => {
+                  const evaluation = candidate.evaluations.find((entry) => entry.jobId === item.jobId && entry.status === "COMPLETED");
+                  const scorecard = candidate.interviewScorecards.find((entry) => entry.jobId === item.jobId);
+                  return <div key={item.id} className={`rounded-lg border p-3 ${item.id === application?.id ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <Link href={`/candidates/${candidate.id}?applicationId=${item.id}`} className="font-semibold text-slate-950 hover:underline">{item.job.title}</Link>
+                      <StatusBadge status={item.status} />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{item.job.department} · Applied {item.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                    <p className="mt-2 text-xs font-medium text-slate-600">Fit {evaluation?.overallScore ?? item.fitScore ?? "Pending"} · Scorecard {scorecard ? formatEnum(scorecard.status) : "Not started"}</p>
+                    {evaluation?.recommendation ? <p className="mt-1 text-xs leading-5 text-slate-500">{evaluation.recommendation}</p> : null}
+                    <form action={updateApplicationStatus} className="mt-3 flex gap-2">
+                      <input type="hidden" name="applicationId" value={item.id} />
+                      <select name="status" defaultValue={item.status} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">
+                        {statuses.map((status) => <option key={status} value={status}>{formatEnum(status)}</option>)}
+                      </select>
+                      <button className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white">Update</button>
+                    </form>
+                  </div>;
+                })}
+              </div>
+              <AddApplicationForm candidateId={candidate.id} jobs={availableJobs.map((job) => ({ id: job.id, title: job.title, department: job.department }))} />
+            </div>
 
             <div className="surface rounded-lg p-5">
               <h2 className="text-lg font-semibold text-slate-950">Notes</h2>
@@ -316,6 +336,7 @@ export default async function CandidateDetailPage({
 
             <InterviewScorecardPanel
               candidateId={candidate.id}
+              jobId={selectedJobId}
               scorecard={latestScorecard}
               hasEvaluation={Boolean(latestEvaluation && latestEvaluation.status === "COMPLETED")}
             />

@@ -102,6 +102,7 @@ export default async function ComparePage({
                           {candidate.name}
                         </Link>
                         <StatusBadge status={candidate.status} />
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Scorecard: {candidate.scorecardStatus ? candidate.scorecardStatus.replace("_", " ") : "Not started"}</span>
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{candidate.roleAppliedFor}</p>
                       <div className="mt-4 flex flex-wrap gap-2">

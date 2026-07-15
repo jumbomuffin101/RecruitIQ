@@ -10,9 +10,11 @@ import {
 
 export function GenerateAnalysisForm({
   candidateId,
+  jobId,
   hasAnalysis,
 }: {
   candidateId: string;
+  jobId?: string;
   hasAnalysis: boolean;
 }) {
   const [state, formAction] = useActionState(generateCandidateAnalysis, initialEvaluationActionState);
@@ -22,6 +24,7 @@ export function GenerateAnalysisForm({
     <div className="flex flex-col items-start gap-2">
       <form action={formAction}>
         <input type="hidden" name="candidateId" value={candidateId} />
+        {jobId ? <input type="hidden" name="jobId" value={jobId} /> : null}
         <GenerateAnalysisButton hasAnalysis={hasAnalysis} />
       </form>
       {state.status !== "idle" ? (
