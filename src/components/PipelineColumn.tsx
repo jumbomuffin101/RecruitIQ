@@ -18,7 +18,7 @@ type PipelineColumnProps = {
 
 const statuses = ["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"];
 
-export function PipelineColumn({ status, applications }: PipelineColumnProps) {
+export function PipelineColumn({ status, applications, canManage = true }: PipelineColumnProps & { canManage?: boolean }) {
   return (
     <section className="min-w-72 flex-1 rounded-lg border border-slate-200 bg-slate-50 p-3">
       <div className="mb-3 flex items-center justify-between">
@@ -40,7 +40,7 @@ export function PipelineColumn({ status, applications }: PipelineColumnProps) {
             </div>
             {application.recommendation ? <p className="mt-2 text-xs leading-5 text-slate-500">{application.recommendation}</p> : null}
             <p className="mt-2 text-xs font-semibold text-slate-500">Interview scorecard: {application.scorecardStatus ? formatEnum(application.scorecardStatus) : "Not started"}</p>
-            <form action={updateApplicationStatus} className="mt-3">
+            {canManage ? <form action={updateApplicationStatus} className="mt-3">
               <input type="hidden" name="applicationId" value={application.id} />
               <select
                 name="status"
@@ -56,7 +56,7 @@ export function PipelineColumn({ status, applications }: PipelineColumnProps) {
               <button className="mt-2 w-full rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white">
                 Update
               </button>
-            </form>
+            </form> : null}
           </article>
         ))}
         {applications.length === 0 ? (

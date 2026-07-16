@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { extractText } from "unpdf";
+import { requireRole, hiringManagerRoles } from "@/lib/auth-context";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -8,6 +9,7 @@ const MAX_FILE_SIZE = 4 * 1024 * 1024;
 
 export async function POST(request: Request) {
   try {
+    await requireRole(...hiringManagerRoles);
     const formData = await request.formData();
     const file = formData.get("resume");
 
@@ -43,7 +45,10 @@ export async function POST(request: Request) {
       { text: cleanedText, fileName: file.name },
       { headers: { "Cache-Control": "no-store" } },
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes("Sign in") || error.message.includes("permission"))) {
+      return NextResponse.json({ error: "Authentication is required to parse resumes." }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "We could not read this resume. Please paste the resume text manually." },
       { status: 422 },

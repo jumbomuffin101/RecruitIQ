@@ -14,7 +14,7 @@ async function main() {
     data: {
       name: "Northstar Labs",
       slug: "recruitiq-demo",
-      users: { create: { name: "Alex Morgan", email: "alex@northstarlabs.example" } },
+      users: { create: { name: "Alex Morgan", email: "alex@northstarlabs.example", role: "ADMIN" } },
     },
   });
 

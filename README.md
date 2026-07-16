@@ -155,6 +155,7 @@ Every application is created at `APPLIED` with an initial `ApplicationStatusHist
 - Amazon Aurora PostgreSQL
 - Vercel
 - Optional OpenRouter API
+- Auth.js with GitHub OAuth and Prisma database sessions
 - `unpdf` serverless PDF text extraction
 
 ## Important Files
@@ -183,6 +184,9 @@ Every application is created at `APPLIED` with an initial `ApplicationStatusHist
 
 ```bash
 DATABASE_URL=""
+AUTH_SECRET=
+AUTH_GITHUB_ID=
+AUTH_GITHUB_SECRET=
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=openai/gpt-oss-120b:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
@@ -191,6 +195,7 @@ OPENROUTER_SITE_URL=
 ```
 
 - `DATABASE_URL` is required and should point to Amazon Aurora PostgreSQL in production.
+- `AUTH_SECRET`, `AUTH_GITHUB_ID`, and `AUTH_GITHUB_SECRET` configure Auth.js with GitHub OAuth. Generate `AUTH_SECRET` with a secure random value; none of these values are exposed to the browser.
 - `OPENROUTER_API_KEY` is optional and is only read by server-side code.
 - OpenRouter is used server-side to improve candidate summaries, role match explanations, strengths, gaps, next steps, and interview kits.
 - Fit scores remain explainable and deterministic based on skill and requirement matching.
@@ -211,6 +216,20 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+### Authentication and Organization Isolation
+
+RecruitIQ uses Auth.js with GitHub OAuth and Prisma-backed database sessions. Authentication determines the `User`; the user determines the `Organization`; every hiring query and mutation is scoped to that organization. Client-supplied organization IDs are never accepted for authorization.
+
+The first authenticated user without an organization is redirected to `/onboarding`, where a workspace is created and that user becomes its `ADMIN`. New workspaces begin empty; seeded Northstar Labs data is never copied into a real organization automatically.
+
+Roles are intentionally small:
+
+- `ADMIN`: full workspace management, including deletion.
+- `RECRUITER`: create and manage jobs, candidates, applications, evaluations, and scorecards.
+- `INTERVIEWER`: view context and submit interview feedback; cannot edit jobs, rubrics, candidates, or pipeline stages.
+
+Development seed data creates Northstar Labs with an `ADMIN` record for `alex@northstarlabs.example`. To view that workspace through OAuth, associate the signed-in development user with the seeded organization through a local database tool; production has no demo auth bypass.
 
 For local PostgreSQL with Docker:
 

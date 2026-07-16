@@ -9,6 +9,7 @@ import { JobRubricForm } from "@/components/JobRubricForm";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getPrisma } from "@/lib/prisma";
 import { getWorkspaceOrganization } from "@/lib/data";
+import { getCurrentUserContext } from "@/lib/auth-context";
 import { formatEnum } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,9 @@ export default async function JobDetailPage({
     notFound();
   }
   const activeRequirements = job.jobRequirements.filter((requirement) => !requirement.deletedAt);
+  const context = await getCurrentUserContext();
+  const canManage = context.role !== "INTERVIEWER";
+  const canDelete = context.role === "ADMIN";
   const rubric = job.evaluationRubric;
   const rubricTotal = rubric
     ? rubric.requiredSkillsWeight + rubric.preferredWeight + rubric.experienceWeight + rubric.projectWeight + rubric.educationWeight + rubric.domainWeight
@@ -86,14 +90,14 @@ export default async function JobDetailPage({
           <ArrowLeft className="h-4 w-4" />
           Back to jobs
         </Link>
-        <DeleteConfirmationButton
+        {canDelete ? <DeleteConfirmationButton
           action={deleteJob}
           hiddenFields={{ jobId: job.id }}
           buttonLabel="Delete Job"
           title="Delete job"
           description="Are you sure you want to delete this job? This action cannot be undone."
           confirmLabel="Delete Job"
-        />
+        /> : null}
       </div>
 
         <section className="surface rounded-lg p-5">
@@ -183,7 +187,7 @@ export default async function JobDetailPage({
                       </p>
                     ) : null}
                     <p className="mt-2 text-xs font-semibold text-slate-500">Interview scorecard: {application.candidate.interviewScorecards[0] ? formatEnum(application.candidate.interviewScorecards[0].status) : "Not started"}</p>
-                    <form action={updateApplicationStatus} className="mt-3 flex gap-2"><input type="hidden" name="applicationId" value={application.id} /><select name="status" defaultValue={application.status} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">{["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"].map((status) => <option key={status} value={status}>{formatEnum(status)}</option>)}</select><button className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white">Update</button></form>
+                    {canManage ? <form action={updateApplicationStatus} className="mt-3 flex gap-2"><input type="hidden" name="applicationId" value={application.id} /><select name="status" defaultValue={application.status} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">{["APPLIED", "SCREENED", "INTERVIEW", "OFFER", "REJECTED"].map((status) => <option key={status} value={status}>{formatEnum(status)}</option>)}</select><button className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white">Update</button></form> : null}
                   </div>
                 ))}
               </div>
@@ -193,7 +197,7 @@ export default async function JobDetailPage({
         </section>
 
         <section className="mt-6">
-          <JobRubricForm mode="edit" action={updateJob} job={job} />
+          {canManage ? <JobRubricForm mode="edit" action={updateJob} job={job} /> : null}
         </section>
     </>
   );

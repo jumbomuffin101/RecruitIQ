@@ -6,6 +6,7 @@ import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { getCandidates, getJobs } from "@/lib/data";
+import { getCurrentUserContext } from "@/lib/auth-context";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,8 @@ export default async function CandidatesPage({
 }) {
   try {
     const { deleted } = await searchParams;
-    const [candidates, jobs] = await Promise.all([getCandidates(), getJobs()]);
+    const [candidates, jobs, context] = await Promise.all([getCandidates(), getJobs(), getCurrentUserContext()]);
+    const canManage = context.role !== "INTERVIEWER";
 
     return (
       <>
@@ -31,7 +33,7 @@ export default async function CandidatesPage({
           </div>
         ) : null}
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <CandidateIntakeForm jobs={jobs.map((job) => ({ id: job.id, title: job.title, department: job.department }))} />
+          {canManage ? <CandidateIntakeForm jobs={jobs.map((job) => ({ id: job.id, title: job.title, department: job.department }))} /> : <div className="surface rounded-lg p-5 text-sm leading-6 text-slate-600">Interviewers can review candidate context and submit scorecard feedback, but cannot create candidates or applications.</div>}
 
           <div>
             {candidates.length ? (

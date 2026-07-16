@@ -21,7 +21,7 @@ const navItems = [
   { href: "/architecture", label: "Architecture", icon: Sparkles },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ user }: { user: React.ReactNode }) {
   return (
     <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-slate-200 bg-white/95 px-4 py-5 shadow-[8px_0_30px_rgba(15,23,42,0.04)] lg:block">
       <Link href="/" className="mb-8 flex items-center gap-3 px-2">
@@ -49,17 +49,12 @@ export function AppSidebar() {
         ))}
       </nav>
 
-      <div className="absolute bottom-5 left-4 right-4 rounded-lg bg-slate-950 p-4 text-white ring-1 ring-white/10">
-        <p className="text-sm font-semibold">Recruiter Copilot</p>
-        <p className="mt-1 text-xs leading-5 text-slate-300">
-          Resume intelligence, candidate ranking, interview kits, and prioritized actions.
-        </p>
-      </div>
+      <div className="absolute bottom-5 left-4 right-4 space-y-3"><div className="rounded-lg bg-slate-950 p-4 text-white ring-1 ring-white/10"><p className="text-sm font-semibold">Recruiter Copilot</p><p className="mt-1 text-xs leading-5 text-slate-300">Resume intelligence, candidate ranking, interview kits, and prioritized actions.</p></div>{user}</div>
     </aside>
   );
 }
 
-export function MobileNav() {
+export function MobileNav({ user }: { user: React.ReactNode }) {
   return (
     <div className="border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
       <div className="mb-3 flex items-center justify-between">
@@ -82,6 +77,7 @@ export function MobileNav() {
           </Link>
         ))}
       </nav>
+      <div className="mt-3">{user}</div>
     </div>
   );
 }

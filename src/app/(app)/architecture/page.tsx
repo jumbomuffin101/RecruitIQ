@@ -4,8 +4,8 @@ import { PageHeader } from "@/components/PageHeader";
 const architectureSteps = [
   {
     title: "Recruiter",
-    subtitle: "User experience",
-    description: "Hiring teams manage jobs, resumes, candidates, decisions, and pipeline activity.",
+    subtitle: "Authenticated organization user",
+    description: "Auth.js resolves the signed-in user, organization membership, and basic role before hiring data is loaded.",
     icon: UserRound,
   },
   {
@@ -39,6 +39,7 @@ const proofCards = [
   ["Deployment", "Vercel with Next.js server functions"],
   ["ORM", "Prisma with a PostgreSQL datasource"],
   ["AI service", "Optional OpenRouter; deterministic fallback always available"],
+  ["Access control", "Auth.js sessions, organization-scoped queries, and server-side role checks"],
 ];
 
 export default function ArchitecturePage() {

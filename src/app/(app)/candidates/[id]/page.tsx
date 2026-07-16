@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CATEGORY_SCORE_LABELS } from "@/lib/evaluations/constants";
 import { formatEnum } from "@/lib/utils";
 import { getCandidateDetail, getJobs } from "@/lib/data";
+import { getCurrentUserContext } from "@/lib/auth-context";
 import { type CandidateStage, getCandidateRecommendation } from "@/lib/recommendations";
 
 export const dynamic = "force-dynamic";
@@ -76,7 +77,10 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-    const availableJobs = (await getJobs()).filter((job) => !candidate.applications.some((item) => item.jobId === job.id));
+    const [jobs, context] = await Promise.all([getJobs(), getCurrentUserContext()]);
+    const availableJobs = jobs.filter((job) => !candidate.applications.some((item) => item.jobId === job.id));
+    const canManage = context.role !== "INTERVIEWER";
+    const canDelete = context.role === "ADMIN";
 
     const application = candidate.applications.find((item) => item.id === applicationId) ?? candidate.applications[0];
     const selectedJobId = application?.jobId;
@@ -155,15 +159,15 @@ export default async function CandidateDetailPage({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <DeleteConfirmationButton
+              {canDelete ? <DeleteConfirmationButton
                 action={deleteCandidate}
                 hiddenFields={{ candidateId: candidate.id }}
                 buttonLabel="Delete Candidate"
                 title="Delete candidate"
                 description="Are you sure you want to delete this candidate? This action cannot be undone."
                 confirmLabel="Delete Candidate"
-              />
-              <GenerateAnalysisForm candidateId={candidate.id} jobId={selectedJobId} hasAnalysis={Boolean(analysis)} />
+              /> : null}
+              {canManage ? <GenerateAnalysisForm candidateId={candidate.id} jobId={selectedJobId} hasAnalysis={Boolean(analysis)} /> : null}
             </div>
           </div>
         </div>
@@ -223,17 +227,17 @@ export default async function CandidateDetailPage({
                     <p className="mt-2 text-xs font-medium text-slate-600">Fit {evaluation?.overallScore ?? item.fitScore ?? "Pending"} · Scorecard {scorecard ? formatEnum(scorecard.status) : "Not started"}</p>
                     {evaluation?.recommendation ? <p className="mt-1 text-xs leading-5 text-slate-500">{evaluation.recommendation}</p> : null}
                     {item.statusHistory.length ? <div className="mt-2 text-xs text-slate-500">History: {item.statusHistory.slice(0, 3).map((entry) => `${entry.fromStatus ? `${formatEnum(entry.fromStatus)} to ` : ""}${formatEnum(entry.toStatus)}`).join(" · ")}</div> : null}
-                    <form action={updateApplicationStatus} className="mt-3 flex gap-2">
+                    {canManage ? <form action={updateApplicationStatus} className="mt-3 flex gap-2">
                       <input type="hidden" name="applicationId" value={item.id} />
                       <select name="status" defaultValue={item.status} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">
                         {statuses.map((status) => <option key={status} value={status}>{formatEnum(status)}</option>)}
                       </select>
                       <button className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white">Update</button>
-                    </form>
+                    </form> : null}
                   </div>;
                 })}
               </div>
-              <AddApplicationForm candidateId={candidate.id} jobs={availableJobs.map((job) => ({ id: job.id, title: job.title, department: job.department }))} />
+              {canManage ? <AddApplicationForm candidateId={candidate.id} jobs={availableJobs.map((job) => ({ id: job.id, title: job.title, department: job.department }))} /> : null}
             </div>
 
             <div className="surface rounded-lg p-5">

@@ -17,7 +17,7 @@ type ScorecardCriterion = {
   evaluationGuidance: string | null;
   weight: number;
   requirementResult: { status: "MATCHED" | "PARTIAL" | "MISSING"; requirementText: string | null } | null;
-  responses: Array<{ rating: number | null; signal: "STRONG_NEGATIVE" | "NEGATIVE" | "NEUTRAL" | "POSITIVE" | "STRONG_POSITIVE" | null; notes: string | null; evidence: string | null }>;
+  responses: Array<{ rating: number | null; signal: "STRONG_NEGATIVE" | "NEGATIVE" | "NEUTRAL" | "POSITIVE" | "STRONG_POSITIVE" | null; notes: string | null; evidence: string | null; submittedByUser: { name: string | null } | null }>;
 };
 
 type Scorecard = {
@@ -140,6 +140,7 @@ export function InterviewScorecardPanel({ candidateId, jobId, scorecard, hasEval
                   <textarea name={`notes:${criterion.id}`} defaultValue={response?.notes ?? ""} disabled={isCompleted} maxLength={3000} rows={3} placeholder="Context, concerns, and follow-up details." className="mt-1 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50" />
                 </label>
               </div>
+              {response?.submittedByUser?.name ? <p className="mt-3 text-xs font-medium text-slate-500">Submitted by {response.submittedByUser.name}</p> : null}
             </article>
           );
         })}

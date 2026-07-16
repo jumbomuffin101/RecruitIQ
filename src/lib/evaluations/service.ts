@@ -23,6 +23,7 @@ type EvaluateCandidateForJobInput = {
   organizationId: string;
   candidateId: string;
   jobId: string;
+  actorUserId?: string;
 };
 
 export type EvaluateCandidateForJobResult = {
@@ -162,6 +163,7 @@ export async function evaluateCandidateForJob({
   organizationId,
   candidateId,
   jobId,
+  actorUserId,
 }: EvaluateCandidateForJobInput): Promise<EvaluateCandidateForJobResult> {
   const prisma = getPrisma();
   const [candidate, job] = await Promise.all([
@@ -325,13 +327,14 @@ export async function evaluateCandidateForJob({
         },
         });
         await tx.applicationStatusHistory.create({
-          data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created during job-specific evaluation." },
+          data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created during job-specific evaluation.", changedByUserId: actorUserId },
         });
       }
 
       await tx.activityLog.create({
         data: {
           organizationId,
+          actorUserId,
           type: ActivityType.ANALYSIS_GENERATED,
           message: `Evaluation generated for ${candidate.name}.`,
           metadata: {

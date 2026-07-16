@@ -23,6 +23,7 @@ import {
 import { getPrisma } from "@/lib/prisma";
 import { extractResumeWithFallback } from "@/lib/resume-extract";
 import { createApplicationSchema, parseApplicationActionInput } from "@/lib/applications/schemas";
+import { getCurrentUserContext, hiringManagerRoles, requireRole } from "@/lib/auth-context";
 import {
   createInterviewScorecard,
   getInterviewSignalForRating,
@@ -77,6 +78,7 @@ function safeEvaluationActionError(error: unknown) {
 }
 
 export async function parseResumeAction(formData: FormData) {
+  await requireRole(...hiringManagerRoles);
   const resumeText = requiredString(formData, "resumeText");
   if (resumeText.length > 100_000) {
     return { success: false as const, error: "Resume text is too long. Please keep it under 100,000 characters." };
@@ -91,6 +93,7 @@ export async function parseResumeAction(formData: FormData) {
 
 export async function createJob(_previousState: JobActionState, formData: FormData): Promise<JobActionState> {
   const prisma = getPrisma();
+  const context = await requireRole(...hiringManagerRoles);
   const org = await getWorkspaceOrganization();
   let jobId = "";
 
@@ -138,6 +141,7 @@ export async function createJob(_previousState: JobActionState, formData: FormDa
       await tx.activityLog.create({
         data: {
           organizationId: org.id,
+          actorUserId: context.userId,
           type: ActivityType.JOB_CREATED,
           message: `${createdJob.title} was created with a structured evaluation rubric.`,
         },
@@ -157,6 +161,7 @@ export async function createJob(_previousState: JobActionState, formData: FormDa
 
 export async function updateJob(_previousState: JobActionState, formData: FormData): Promise<JobActionState> {
   const prisma = getPrisma();
+  const context = await requireRole(...hiringManagerRoles);
   const org = await getWorkspaceOrganization();
   const jobId = requiredString(formData, "jobId");
 
@@ -252,6 +257,7 @@ export async function updateJob(_previousState: JobActionState, formData: FormDa
       await tx.activityLog.create({
         data: {
           organizationId: org.id,
+          actorUserId: context.userId,
           type: ActivityType.JOB_CREATED,
           message: `${input.title} rubric and requirements were updated.`,
           metadata: { jobId: existingJob.id },
@@ -271,6 +277,7 @@ export async function updateJob(_previousState: JobActionState, formData: FormDa
 
 export async function createCandidate(_previousState: CandidateFormState, formData: FormData): Promise<CandidateFormState> {
   const prisma = getPrisma();
+  const context = await requireRole(...hiringManagerRoles);
   const org = await getWorkspaceOrganization();
   const jobId = requiredString(formData, "jobId");
   const experienceSummary = requiredString(formData, "experienceSummary");
@@ -309,12 +316,13 @@ export async function createCandidate(_previousState: CandidateFormState, formDa
         data: { organizationId: org.id, candidateId: createdCandidate.id, jobId: job.id, status: ApplicationStatus.APPLIED },
       });
       await tx.applicationStatusHistory.create({
-        data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created." },
+        data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created.", changedByUserId: context.userId },
       });
 
       await tx.activityLog.create({
         data: {
           organizationId: org.id,
+          actorUserId: context.userId,
           type: ActivityType.CANDIDATE_CREATED,
           message: `${createdCandidate.name} applied to ${job.title}.`,
           metadata: { candidateId: createdCandidate.id, jobId: job.id, applicationId: application.id },
@@ -347,6 +355,7 @@ export async function addCandidateToJob(
   formData: FormData,
 ): Promise<ApplicationActionState> {
   const prisma = getPrisma();
+  const context = await requireRole(...hiringManagerRoles);
   const org = await getWorkspaceOrganization();
   try {
     const input = createApplicationSchema.parse({ candidateId: formData.get("candidateId"), jobId: formData.get("jobId") });
@@ -359,9 +368,9 @@ export async function addCandidateToJob(
       const application = await tx.application.create({
         data: { organizationId: org.id, candidateId: candidate.id, jobId: job.id, status: ApplicationStatus.APPLIED },
       });
-      await tx.applicationStatusHistory.create({ data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created." } });
+      await tx.applicationStatusHistory.create({ data: { applicationId: application.id, toStatus: ApplicationStatus.APPLIED, note: "Application created.", changedByUserId: context.userId } });
       await tx.activityLog.create({
-        data: { organizationId: org.id, type: ActivityType.CANDIDATE_CREATED, message: `${candidate.name} applied to ${job.title}.`, metadata: { candidateId: candidate.id, jobId: job.id, applicationId: application.id } },
+        data: { organizationId: org.id, actorUserId: context.userId, type: ActivityType.CANDIDATE_CREATED, message: `${candidate.name} applied to ${job.title}.`, metadata: { candidateId: candidate.id, jobId: job.id, applicationId: application.id } },
       });
       return application;
     });
@@ -380,6 +389,7 @@ export async function addCandidateToJob(
 
 export async function updateApplicationStatus(formData: FormData) {
   const prisma = getPrisma();
+  const context = await requireRole(...hiringManagerRoles);
   const org = await getWorkspaceOrganization();
   const input = parseApplicationActionInput(formData);
   const application = await prisma.application.findFirst({
@@ -391,10 +401,11 @@ export async function updateApplicationStatus(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     await tx.application.update({ where: { id: application.id }, data: { status: input.status } });
-    await tx.applicationStatusHistory.create({ data: { applicationId: application.id, fromStatus: application.status, toStatus: input.status, note: input.note } });
+    await tx.applicationStatusHistory.create({ data: { applicationId: application.id, fromStatus: application.status, toStatus: input.status, note: input.note, changedByUserId: context.userId } });
     await tx.activityLog.create({
       data: {
         organizationId: org.id,
+        actorUserId: context.userId,
         type: ActivityType.STATUS_CHANGED,
         message: `${application.candidate.name} moved to ${input.status} for ${application.job.title}.`,
         metadata: { candidateId: application.candidateId, jobId: application.jobId, applicationId: application.id, fromStatus: application.status, toStatus: input.status },
@@ -412,6 +423,7 @@ export async function updateApplicationStatus(formData: FormData) {
 
 export async function deleteCandidate(formData: FormData) {
   const prisma = getPrisma();
+  await requireRole("ADMIN");
   const candidateId = requiredString(formData, "candidateId");
   const org = await getWorkspaceOrganization();
 
@@ -436,6 +448,7 @@ export async function deleteCandidate(formData: FormData) {
 
 export async function deleteJob(formData: FormData) {
   const prisma = getPrisma();
+  await requireRole("ADMIN");
   const jobId = requiredString(formData, "jobId");
   const org = await getWorkspaceOrganization();
 
@@ -472,6 +485,7 @@ export async function generateCandidateAnalysis(
 
   try {
     const prisma = getPrisma();
+    const context = await requireRole(...hiringManagerRoles);
     candidateId = requiredString(formData, "candidateId");
     const org = await getWorkspaceOrganization();
     const candidate = await prisma.candidate.findFirst({
@@ -496,6 +510,7 @@ export async function generateCandidateAnalysis(
       organizationId: org.id,
       candidateId: candidate.id,
       jobId: job.id,
+      actorUserId: context.userId,
     });
   } catch (error) {
     return createEvaluationErrorState(safeEvaluationActionError(error));
@@ -520,6 +535,7 @@ export async function generateInterviewScorecard(
 ): Promise<InterviewScorecardActionState> {
   try {
     const prisma = getPrisma();
+    const context = await requireRole(...hiringManagerRoles);
     const org = await getWorkspaceOrganization();
     const candidateId = requiredString(formData, "candidateId");
     const jobId = requiredString(formData, "jobId");
@@ -543,6 +559,9 @@ export async function generateInterviewScorecard(
       jobId,
       evaluationId: evaluation.id,
     });
+    await prisma.activityLog.create({
+      data: { organizationId: org.id, actorUserId: context.userId, type: ActivityType.ANALYSIS_GENERATED, message: `Interview scorecard generated for ${candidate.name}.`, metadata: { candidateId: candidate.id, jobId, scorecardId: scorecard.id } },
+    });
     revalidatePath(`/candidates/${candidateId}`);
     return { status: "success", message: "Interview scorecard generated from the latest evaluation.", scorecardId: scorecard.id };
   } catch (error) {
@@ -556,6 +575,7 @@ export async function saveInterviewScorecard(
 ): Promise<InterviewScorecardActionState> {
   try {
     const prisma = getPrisma();
+    const context = await getCurrentUserContext();
     const org = await getWorkspaceOrganization();
     const scorecardId = requiredString(formData, "scorecardId");
     const intent = String(formData.get("intent") ?? "save");
@@ -595,8 +615,8 @@ export async function saveInterviewScorecard(
           substantiveResponses += 1;
           await tx.interviewResponse.upsert({
             where: { scorecardId_criterionId: { scorecardId: scorecard.id, criterionId: criterion.id } },
-            create: { scorecardId: scorecard.id, criterionId: criterion.id, rating, signal: signal as never, notes, evidence },
-            update: { rating, signal: signal as never, notes, evidence },
+            create: { scorecardId: scorecard.id, criterionId: criterion.id, rating, signal: signal as never, notes, evidence, submittedByUserId: context.userId },
+            update: { rating, signal: signal as never, notes, evidence, submittedByUserId: context.userId },
           });
         } else {
           await tx.interviewResponse.deleteMany({ where: { scorecardId: scorecard.id, criterionId: criterion.id } });
@@ -613,6 +633,10 @@ export async function saveInterviewScorecard(
           completedAt: intent === "complete" ? new Date() : null,
         },
       });
+    });
+
+    await prisma.activityLog.create({
+      data: { organizationId: org.id, actorUserId: context.userId, type: ActivityType.NOTE_ADDED, message: `Interview feedback saved for scorecard ${scorecard.version}.`, metadata: { candidateId: scorecard.candidateId, jobId: scorecard.jobId, scorecardId: scorecard.id, intent } },
     });
 
     revalidatePath(`/candidates/${scorecard.candidateId}`);

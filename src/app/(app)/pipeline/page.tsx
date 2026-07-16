@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PipelineColumn } from "@/components/PipelineColumn";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
 import { getPipelineData } from "@/lib/data";
+import { getCurrentUserContext } from "@/lib/auth-context";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export default async function PipelinePage({
 }) {
   try {
     const { jobId } = await searchParams;
-    const data = await getPipelineData(jobId);
+    const [data, context] = await Promise.all([getPipelineData(jobId), getCurrentUserContext()]);
 
     return (
       <>
@@ -33,7 +34,7 @@ export default async function PipelinePage({
         </form>
         <div className="flex gap-4 overflow-x-auto pb-4">
           {data.columns.map((column) => (
-            <PipelineColumn key={column.status} status={column.status} applications={column.applications} />
+            <PipelineColumn key={column.status} status={column.status} applications={column.applications} canManage={context.role !== "INTERVIEWER"} />
           ))}
         </div>
       </>

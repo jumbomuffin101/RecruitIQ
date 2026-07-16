@@ -2,24 +2,11 @@ import { getPrisma } from "@/lib/prisma";
 import { analyzeCandidateForJob } from "@/lib/ai";
 import { getCandidateRecommendation } from "@/lib/recommendations";
 import { applicationStages, countApplicationsByStage, getApplicationConversions } from "@/lib/applications/metrics";
+import { getCurrentUserContext } from "@/lib/auth-context";
 
 export async function getWorkspaceOrganization() {
-  const prisma = getPrisma();
-
-  return prisma.organization.upsert({
-    where: { slug: "recruitiq-demo" },
-    update: { name: "Northstar Labs" },
-    create: {
-      name: "Northstar Labs",
-      slug: "recruitiq-demo",
-      users: {
-        create: {
-          name: "Alex Morgan",
-          email: "alex@northstarlabs.example",
-        },
-      },
-    },
-  });
+  const context = await getCurrentUserContext();
+  return { id: context.organizationId, name: context.organizationName };
 }
 
 export async function getJobs() {
@@ -65,7 +52,7 @@ export async function getCandidateDetail(id: string) {
             orderBy: { sortOrder: "asc" },
             include: {
               requirementResult: { select: { id: true, status: true, requirementText: true } },
-              responses: { orderBy: { updatedAt: "desc" } },
+              responses: { orderBy: { updatedAt: "desc" }, include: { submittedByUser: { select: { name: true } } } },
             },
           },
         },

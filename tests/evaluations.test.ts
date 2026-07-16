@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ApplicationStatus, RequirementCategory, RequirementMatchStatus, RequirementType } from "@prisma/client";
+import { ApplicationStatus, RequirementCategory, RequirementMatchStatus, RequirementType, UserRole } from "@prisma/client";
 import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
 import {
   calculateCategoryScores,
@@ -17,6 +17,7 @@ import { classifyOpenRouterStatus, parseOpenRouterJson } from "@/lib/openrouter"
 import { getCandidateRecommendation, getDeterministicRecommendedStage } from "@/lib/recommendations";
 import { getInterviewValidationOutcome, getValidationSummary } from "@/lib/interviews/validation";
 import { countApplicationsByStage, getApplicationConversions } from "@/lib/applications/metrics";
+import { canDeleteHiringData, canManageHiring, canSubmitInterviewFeedback } from "@/lib/permissions";
 
 const candidate = {
   name: "Maya Chen",
@@ -281,4 +282,13 @@ test("application conversion metrics are deterministic and based on application 
   const metrics = getApplicationConversions(applications);
   assert.equal(metrics.rejectionRate, 20);
   assert.equal(metrics.interviewToOffer, 100);
+});
+
+test("role permissions keep interview feedback available without exposing hiring management", () => {
+  assert.equal(canManageHiring(UserRole.ADMIN), true);
+  assert.equal(canManageHiring(UserRole.RECRUITER), true);
+  assert.equal(canManageHiring(UserRole.INTERVIEWER), false);
+  assert.equal(canDeleteHiringData(UserRole.ADMIN), true);
+  assert.equal(canDeleteHiringData(UserRole.RECRUITER), false);
+  assert.equal(canSubmitInterviewFeedback(UserRole.INTERVIEWER), true);
 });

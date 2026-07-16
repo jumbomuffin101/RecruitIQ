@@ -7,6 +7,7 @@ import { JobRubricForm } from "@/components/JobRubricForm";
 import { JobCard } from "@/components/JobCard";
 import { PageHeader } from "@/components/PageHeader";
 import { getJobs } from "@/lib/data";
+import { getCurrentUserContext } from "@/lib/auth-context";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,8 @@ export default async function JobsPage({
 }) {
   try {
     const { deleted } = await searchParams;
-    const jobs = await getJobs();
+    const [jobs, context] = await Promise.all([getJobs(), getCurrentUserContext()]);
+    const canManage = context.role !== "INTERVIEWER";
 
     return (
       <>
@@ -32,7 +34,7 @@ export default async function JobsPage({
           </div>
         ) : null}
         <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-          <JobRubricForm mode="create" action={createJob} />
+          {canManage ? <JobRubricForm mode="create" action={createJob} /> : <div className="surface rounded-lg p-5 text-sm leading-6 text-slate-600">Interviewers can review hiring context and submit scorecard feedback, but cannot create or edit jobs.</div>}
 
           <div>
             {jobs.length ? (

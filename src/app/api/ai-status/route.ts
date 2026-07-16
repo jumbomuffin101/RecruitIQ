@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { getOpenRouterStatus } from "@/lib/openrouter";
+import { getCurrentUserContext } from "@/lib/auth-context";
 
 export const runtime = "nodejs";
 
-export function GET() {
+export async function GET() {
+  try {
+    await getCurrentUserContext();
+  } catch {
+    return NextResponse.json({ error: "Authentication is required." }, { status: 401 });
+  }
   const status = getOpenRouterStatus();
 
   if (process.env.NODE_ENV === "production") {

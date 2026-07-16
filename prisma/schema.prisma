@@ -109,14 +109,28 @@ enum InterviewSignal {
   STRONG_POSITIVE
 }
 
+enum UserRole {
+  ADMIN
+  RECRUITER
+  INTERVIEWER
+}
+
 model User {
-  id             String        @id @default(cuid())
-  email          String        @unique
-  name           String
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                 String                     @id @default(cuid())
+  name               String?
+  email              String?                    @unique
+  emailVerified      DateTime?
+  image              String?
+  organizationId     String?
+  organization       Organization?              @relation(fields: [organizationId], references: [id])
+  role               UserRole                   @default(RECRUITER)
+  accounts           Account[]
+  sessions           Session[]
+  statusChanges      ApplicationStatusHistory[] @relation("StatusChangedBy")
+  interviewResponses InterviewResponse[]        @relation("InterviewResponseSubmittedBy")
+  activityLogs       ActivityLog[]              @relation("ActivityActor")
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
 }
 
 model Organization {
@@ -237,14 +251,16 @@ model Application {
 }
 
 model ApplicationStatusHistory {
-  id            String             @id @default(cuid())
-  applicationId String
-  fromStatus    ApplicationStatus?
-  toStatus      ApplicationStatus
-  changedAt     DateTime           @default(now())
-  note          String?
+  id              String             @id @default(cuid())
+  applicationId   String
+  fromStatus      ApplicationStatus?
+  toStatus        ApplicationStatus
+  changedAt       DateTime           @default(now())
+  note            String?
+  changedByUserId String?
 
-  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  changedByUser User?       @relation("StatusChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
 
   @@index([applicationId, changedAt])
 }
@@ -406,18 +422,20 @@ model InterviewCriterion {
 }
 
 model InterviewResponse {
-  id          String           @id @default(cuid())
-  scorecardId String
-  criterionId String
-  rating      Int?
-  signal      InterviewSignal?
-  notes       String?
-  evidence    String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id                String           @id @default(cuid())
+  scorecardId       String
+  criterionId       String
+  rating            Int?
+  signal            InterviewSignal?
+  notes             String?
+  evidence          String?
+  submittedByUserId String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
-  scorecard InterviewScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
-  criterion InterviewCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  scorecard       InterviewScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  criterion       InterviewCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  submittedByUser User?              @relation("InterviewResponseSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([scorecardId, criterionId])
   @@index([criterionId])
@@ -430,5 +448,43 @@ model ActivityLog {
   type           ActivityType
   message        String
   metadata       Json?
+  actorUserId    String?
+  actor          User?        @relation("ActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
