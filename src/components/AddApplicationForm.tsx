@@ -2,7 +2,9 @@
 
 import { useActionState } from "react";
 import { Plus } from "lucide-react";
-import { addCandidateToJob, initialApplicationActionState } from "@/app/actions";
+import { addCandidateToJob, type ApplicationActionState } from "@/app/actions";
+
+const initialApplicationActionState: ApplicationActionState = { status: "idle" };
 
 export function AddApplicationForm({
   candidateId,

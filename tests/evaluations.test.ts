@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RequirementCategory, RequirementMatchStatus, RequirementType } from "@prisma/client";
+import { ApplicationStatus, RequirementCategory, RequirementMatchStatus, RequirementType } from "@prisma/client";
 import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
 import {
   calculateCategoryScores,
@@ -16,6 +16,7 @@ import { clamp } from "@/lib/utils";
 import { classifyOpenRouterStatus, parseOpenRouterJson } from "@/lib/openrouter";
 import { getCandidateRecommendation, getDeterministicRecommendedStage } from "@/lib/recommendations";
 import { getInterviewValidationOutcome, getValidationSummary } from "@/lib/interviews/validation";
+import { countApplicationsByStage, getApplicationConversions } from "@/lib/applications/metrics";
 
 const candidate = {
   name: "Maya Chen",
@@ -254,4 +255,30 @@ test("interview feedback validates resume screening without changing the fit sco
   assert.equal(getInterviewValidationOutcome({ screeningStatus: RequirementMatchStatus.PARTIAL, rating: 2, signal: null }), "WEAKENED");
   assert.equal(getInterviewValidationOutcome({ screeningStatus: RequirementMatchStatus.MISSING, rating: null, signal: null }), "UNRESOLVED");
   assert.deepEqual(getValidationSummary(["CONFIRMED", "WEAKENED", "UNRESOLVED"]), { confirmed: 1, weakened: 1, unresolved: 1 });
+});
+
+test("application stages are independent and pipeline counts applications rather than candidates", () => {
+  const applications = [
+    { candidateId: "maya", jobId: "product", status: ApplicationStatus.INTERVIEW },
+    { candidateId: "maya", jobId: "designer", status: ApplicationStatus.SCREENED },
+    { candidateId: "noah", jobId: "product", status: ApplicationStatus.APPLIED },
+  ];
+  const counts = countApplicationsByStage(applications);
+  assert.equal(counts.find((entry) => entry.stage === ApplicationStatus.INTERVIEW)?.count, 1);
+  assert.equal(counts.find((entry) => entry.stage === ApplicationStatus.SCREENED)?.count, 1);
+  assert.equal(counts.find((entry) => entry.stage === ApplicationStatus.APPLIED)?.count, 1);
+  assert.equal(applications.filter((application) => application.jobId === "product").length, 2);
+});
+
+test("application conversion metrics are deterministic and based on application stages", () => {
+  const applications = [
+    { status: ApplicationStatus.APPLIED },
+    { status: ApplicationStatus.SCREENED },
+    { status: ApplicationStatus.INTERVIEW },
+    { status: ApplicationStatus.OFFER },
+    { status: ApplicationStatus.REJECTED },
+  ];
+  const metrics = getApplicationConversions(applications);
+  assert.equal(metrics.rejectionRate, 20);
+  assert.equal(metrics.interviewToOffer, 100);
 });

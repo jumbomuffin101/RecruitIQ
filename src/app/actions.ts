@@ -63,7 +63,6 @@ export type CandidateFormState = {
 } | null;
 
 export type ApplicationActionState = { status: "idle" | "success" | "error"; message?: string };
-export const initialApplicationActionState: ApplicationActionState = { status: "idle" };
 
 function isPrismaKnownError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   return error instanceof Prisma.PrismaClientKnownRequestError;
@@ -351,7 +350,7 @@ export async function addCandidateToJob(
   const org = await getWorkspaceOrganization();
   try {
     const input = createApplicationSchema.parse({ candidateId: formData.get("candidateId"), jobId: formData.get("jobId") });
-    const result = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       const [candidate, job] = await Promise.all([
         tx.candidate.findFirst({ where: { id: input.candidateId, organizationId: org.id }, select: { id: true, name: true } }),
         tx.job.findFirst({ where: { id: input.jobId, organizationId: org.id }, select: { id: true, title: true } }),

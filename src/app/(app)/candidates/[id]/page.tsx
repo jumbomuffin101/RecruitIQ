@@ -57,6 +57,7 @@ function getRecommendationActionLabel(stage: CandidateStage, currentStatus: Cand
 
 export default async function CandidateDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ applicationId?: string }>;
@@ -221,6 +222,7 @@ export default async function CandidateDetailPage({
                     <p className="mt-1 text-xs text-slate-500">{item.job.department} · Applied {item.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
                     <p className="mt-2 text-xs font-medium text-slate-600">Fit {evaluation?.overallScore ?? item.fitScore ?? "Pending"} · Scorecard {scorecard ? formatEnum(scorecard.status) : "Not started"}</p>
                     {evaluation?.recommendation ? <p className="mt-1 text-xs leading-5 text-slate-500">{evaluation.recommendation}</p> : null}
+                    {item.statusHistory.length ? <div className="mt-2 text-xs text-slate-500">History: {item.statusHistory.slice(0, 3).map((entry) => `${entry.fromStatus ? `${formatEnum(entry.fromStatus)} to ` : ""}${formatEnum(entry.toStatus)}`).join(" · ")}</div> : null}
                     <form action={updateApplicationStatus} className="mt-3 flex gap-2">
                       <input type="hidden" name="applicationId" value={item.id} />
                       <select name="status" defaultValue={item.status} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">
