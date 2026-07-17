@@ -56,6 +56,13 @@ async function getClerkUserOrThrow(clerkUserId: string) {
   return user;
 }
 
+function safeErrorReason(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string") {
+    return `${error instanceof Error ? error.name : "Error"}:${error.code}`;
+  }
+  return error instanceof Error ? error.name : "unknown";
+}
+
 async function syncPrismaUser({
   clerkUserId,
   organizationId,
@@ -65,44 +72,66 @@ async function syncPrismaUser({
   organizationId?: string;
   role?: UserRole;
 }) {
-  const prisma = getPrisma();
-  const clerkUser = await getClerkUserOrThrow(clerkUserId);
-  const email = clerkUser.primaryEmailAddress?.emailAddress?.toLowerCase() ?? null;
-  const name = clerkUser.fullName || clerkUser.username || "RecruitIQ user";
-  const image = clerkUser.imageUrl || null;
-  const existing = await prisma.user.findUnique({ where: { clerkUserId } });
+  try {
+    const prisma = getPrisma();
+    const clerkUser = await getClerkUserOrThrow(clerkUserId);
+    const primaryEmail = clerkUser.primaryEmailAddress;
+    const email = primaryEmail?.emailAddress?.toLowerCase() ?? null;
+    const hasVerifiedPrimaryEmail = primaryEmail?.verification?.status === "verified";
+    const name = clerkUser.fullName || clerkUser.username || "RecruitIQ user";
+    const image = clerkUser.imageUrl || null;
+    const existing = await prisma.user.findUnique({ where: { clerkUserId } });
 
-  if (existing) {
-    return prisma.user.update({
-      where: { id: existing.id },
+    if (existing) {
+      return prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name,
+          email,
+          image,
+          ...(organizationId ? { organizationId } : {}),
+          ...(role ? { role } : {}),
+        },
+      });
+    }
+
+    if (email) {
+      const legacyUser = await prisma.user.findUnique({ where: { email } });
+      if (legacyUser) {
+        if (!legacyUser.clerkUserId && hasVerifiedPrimaryEmail) {
+          logger.info("legacy_identity_linked", { userId: legacyUser.id, reason: "verified_primary_email_match" });
+          return prisma.user.update({
+            where: { id: legacyUser.id },
+            data: {
+              clerkUserId,
+              name,
+              email,
+              image,
+              ...(organizationId ? { organizationId } : {}),
+              ...(role ? { role } : {}),
+            },
+          });
+        }
+
+        logger.warn("identity_link_required", { userId: legacyUser.id, reason: "ambiguous_or_unverified_email_match" });
+        throw new IdentityLinkRequiredError();
+      }
+    }
+
+    return prisma.user.create({
       data: {
+        clerkUserId,
         name,
         email,
         image,
-        ...(organizationId ? { organizationId } : {}),
-        ...(role ? { role } : {}),
+        organizationId,
+        role: role ?? UserRole.RECRUITER,
       },
     });
+  } catch (error) {
+    logger.error("prisma_user_sync_failed", { reason: safeErrorReason(error) });
+    throw error;
   }
-
-  if (email) {
-    const legacyUser = await prisma.user.findUnique({ where: { email } });
-    if (legacyUser) {
-      logger.warn("identity_link_required", { userId: legacyUser.id, reason: "legacy_email_match" });
-      throw new IdentityLinkRequiredError();
-    }
-  }
-
-  return prisma.user.create({
-    data: {
-      clerkUserId,
-      name,
-      email,
-      image,
-      organizationId,
-      role: role ?? UserRole.RECRUITER,
-    },
-  });
 }
 
 async function syncPrismaOrganization(clerkOrganizationId: string) {
@@ -121,14 +150,15 @@ async function syncPrismaOrganization(clerkOrganizationId: string) {
   });
 }
 
-export async function requireAuthenticatedUser() {
+export async function requireClerkUser() {
   assertClerkEnvironment();
   const { userId } = await auth();
   if (!userId) {
     logger.warn("authentication_required");
     throw new AuthenticationRequiredError();
   }
-  return syncPrismaUser({ clerkUserId: userId });
+  const user = await syncPrismaUser({ clerkUserId: userId });
+  return { clerkUserId: userId, userId: user.id };
 }
 
 export async function getCurrentUserContext(): Promise<CurrentUserContext> {

@@ -1,12 +1,22 @@
 import { CreateOrganization, OrganizationSwitcher } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth-context";
+import { AuthenticationRequiredError, requireClerkUser } from "@/lib/auth-context";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
-  await requireAuthenticatedUser();
+  try {
+    await requireClerkUser();
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) redirect("/clerk/sign-in");
+    logger.error("onboarding_user_sync_failed", {
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    throw error;
+  }
+
   const { orgId } = await auth();
   if (orgId) redirect("/dashboard");
 
