@@ -24,6 +24,7 @@ import { getPrisma } from "@/lib/prisma";
 import { extractResumeWithFallback } from "@/lib/resume-extract";
 import { createApplicationSchema, parseApplicationActionInput } from "@/lib/applications/schemas";
 import { getCurrentUserContext, hiringManagerRoles, requireRole } from "@/lib/auth-context";
+import { logger } from "@/lib/logger";
 import {
   createInterviewScorecard,
   getInterviewSignalForRating,
@@ -340,7 +341,7 @@ export async function createCandidate(_previousState: CandidateFormState, formDa
       };
     }
 
-    console.error("[Candidate] create failed", error);
+    logger.error("candidate_create_failed", { userId: context.userId, organizationId: org.id, resourceType: "candidate", reason: error instanceof Error ? error.name : "unknown" });
     return { error: "Candidate could not be saved. Please review the details and try again." };
   }
 

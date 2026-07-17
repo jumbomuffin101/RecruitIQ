@@ -1,13 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import { assertDatabaseEnvironment } from "@/lib/env";
 
 let prisma: PrismaClient | null = null;
 
 export function getPrisma() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error(
-      "DATABASE_URL is not configured. Add a PostgreSQL connection string in Vercel or copy .env.example to .env for local development.",
-    );
-  }
+  assertDatabaseEnvironment();
 
   if (!prisma) {
     prisma = new PrismaClient();

@@ -18,6 +18,7 @@ import type { RequirementForScoring, RubricWeights } from "@/lib/evaluations/typ
 import { getOpenRouterModelName } from "@/lib/openrouter";
 import { getPrisma } from "@/lib/prisma";
 import { getCandidateRecommendation } from "@/lib/recommendations";
+import { createOperationId, logger } from "@/lib/logger";
 
 type EvaluateCandidateForJobInput = {
   organizationId: string;
@@ -165,6 +166,7 @@ export async function evaluateCandidateForJob({
   jobId,
   actorUserId,
 }: EvaluateCandidateForJobInput): Promise<EvaluateCandidateForJobResult> {
+  const operationId = createOperationId();
   const prisma = getPrisma();
   const [candidate, job] = await Promise.all([
     prisma.candidate.findFirst({
@@ -350,12 +352,14 @@ export async function evaluateCandidateForJob({
       });
     });
 
+    logger.info("candidate_evaluation_completed", { operationId, userId: actorUserId, organizationId, resourceType: "candidate", resourceId: candidate.id, status: "completed" });
     return {
       evaluationId: pendingEvaluation.id,
       source,
       usedFallback: source !== EvaluationSource.HYBRID,
     };
   } catch (error) {
+    logger.error("candidate_evaluation_failed", { operationId, userId: actorUserId, organizationId, resourceType: "candidate", resourceId: candidateId, reason: error instanceof Error ? error.name : "unknown" });
     await prisma.candidateEvaluation.update({
       where: { id: pendingEvaluation.id },
       data: {

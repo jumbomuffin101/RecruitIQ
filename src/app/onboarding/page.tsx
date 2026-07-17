@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createOrganization } from "@/app/onboarding/actions";
 import { requireAuthenticatedUser } from "@/lib/auth-context";
 
+export const dynamic = "force-dynamic";
+
 export default async function OnboardingPage() {
   const user = await requireAuthenticatedUser();
   if (user.organizationId) redirect("/dashboard");

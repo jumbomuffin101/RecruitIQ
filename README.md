@@ -255,6 +255,48 @@ This repository includes a baseline migration for the schema that existed before
 
 Use `prisma db push` only for disposable local experiments.
 
+## Testing and Operations
+
+Automated tests never use `DATABASE_URL`. Set `DATABASE_URL_TEST` to a disposable PostgreSQL database whose URL clearly identifies it as a test database. The reset script rejects URLs without `test` and rejects Neon and Amazon RDS hostnames.
+
+```bash
+npm run test:db:reset
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+```
+
+Integration tests use two organizations with fixed users, jobs, candidates, applications, and a scorecard. They verify foreign organization IDs resolve to no record and that the evaluation service rejects cross-organization input before persistence.
+
+Playwright uses the same disposable database. It enables a credentials-only fixture provider with `RECRUITIQ_TEST_AUTH=true`; the provider is hard-disabled when `NODE_ENV=production`, has no production fallback, and is hidden from normal product UI. Browser tests do not call GitHub OAuth or OpenRouter. Resume fixtures are fictional.
+
+GitHub Actions in `.github/workflows/ci.yml` runs against a PostgreSQL 16 service: Prisma generation and validation, `prisma migrate deploy` from an empty database, linting, unit and integration tests, build, then Chromium Playwright. `npm run ci` runs the non-browser portion locally.
+
+### Health and Deployment
+
+- `GET /api/health` returns `{ "status": "ok" }` when the process is running.
+- `GET /api/readiness` performs a minimal database query and returns `{ "status": "ready" }`, or a safe `503` response.
+
+Structured server logs record authentication and authorization denials, readiness failures, evaluation outcomes, and OpenRouter failures using non-sensitive IDs and operation IDs. Resume text, interview notes, tokens, OAuth secrets, and raw provider payloads are not logged. Production data-load errors render a generic message rather than Prisma or configuration details.
+
+Deployment sequence:
+
+1. Configure `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, and optional OpenRouter variables.
+2. Configure GitHub OAuth callback: `https://<deployment-domain>/api/auth/callback/github`.
+3. Run the reviewed migration with `npx prisma migrate deploy`.
+4. Deploy the app, then check `/api/health`, `/api/readiness`, authenticated sign-in, and a small hiring workflow.
+5. Roll back application code independently when needed. Use reviewed forward migrations rather than destructive database rollbacks.
+
+Public routes: `/`, `/sign-in`, `/api/health`, and `/api/readiness`. Hiring pages and internal APIs require an Auth.js session. `DATABASE_URL` is required for data access; normal authentication requires `AUTH_SECRET`, `AUTH_GITHUB_ID`, and `AUTH_GITHUB_SECRET`. The deterministic evaluation path remains active when OpenRouter is absent or fails.
+
+```text
+Browser -> Auth.js session -> organization context -> Server Action / Route Handler
+-> authorization policy -> Prisma -> PostgreSQL
+
+Authenticated recruiter -> candidate/job ownership verification -> deterministic evaluation
+-> optional LLM narrative -> validated output -> transactional persistence -> evaluation history
+```
+
 ## Demo Walkthrough
 
 1. Open `/quick-start` for the guided product flow.
@@ -287,8 +329,7 @@ Use `prisma db push` only for disposable local experiments.
 
 ## Future Roadmap
 
-- Authentication and organization permissions
-- Interviewer scorecards and collaborative feedback
+- Role assignment and invitation workflows
 - Email and calendar integrations
 - Durable resume storage when retention is required
 - Amazon Bedrock provider support
@@ -297,7 +338,7 @@ Use `prisma db push` only for disposable local experiments.
 
 ## Known Limitations
 
-- Authentication and organization-level access control are not implemented yet.
+- GitHub OAuth and browser flows require configured credentials and a disposable PostgreSQL test database for local E2E execution.
 - Candidate editing is not implemented yet.
 - The current resume evidence UI is excerpt-based; it does not highlight text inside a rendered resume.
 - PDF parsing works for text-based PDFs, not scanned image-only resumes.

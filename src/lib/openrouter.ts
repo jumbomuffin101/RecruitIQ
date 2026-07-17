@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 type OpenRouterMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -22,6 +24,7 @@ type ChatCompletionPayload = {
     };
   }[];
 };
+
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "openai/gpt-oss-120b:free";
@@ -198,7 +201,7 @@ async function executeOpenRouterJson<T>({
 
     if (!response.ok) {
       const classification = classifyOpenRouterStatus(response.status);
-      console.warn(`[OpenRouter] ${context} failed: status ${response.status} ${response.statusText}`);
+      logger.warn("openrouter_request_failed", { resourceType: context, status: response.status, reason: "provider_response" });
       return {
         ok: false,
         reason: classification.reason,
@@ -215,7 +218,7 @@ async function executeOpenRouterJson<T>({
     const parsed = parseOpenRouterJson<T>(content);
 
     if (!parsed) {
-      console.warn(`[OpenRouter] ${context} failed: invalid JSON response`);
+      logger.warn("openrouter_request_failed", { resourceType: context, reason: "invalid_json" });
       return {
         ok: false,
         reason: "invalid_json",
@@ -226,14 +229,11 @@ async function executeOpenRouterJson<T>({
       };
     }
 
-    console.info(`[OpenRouter] ${context} succeeded`);
+    logger.info("openrouter_request_succeeded", { resourceType: context, status: 200 });
     return { ok: true, data: parsed, attempts: attempt, model: config.model };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
     if (timedOut || (error instanceof Error && error.name === "AbortError")) {
-      console.warn(
-        `[OpenRouter] timed out after ${timeoutMs} ms; model=${config.model}; promptCharacters=${promptCharacterLength}`,
-      );
+      logger.warn("openrouter_request_timed_out", { resourceType: context, reason: `timeout_${timeoutMs}ms_${promptCharacterLength}chars` });
       return {
         ok: false,
         reason: "timeout",
@@ -243,7 +243,7 @@ async function executeOpenRouterJson<T>({
         model: config.model,
       };
     }
-    console.warn(`[OpenRouter] ${context} failed: ${message}`);
+    logger.warn("openrouter_request_failed", { resourceType: context, reason: error instanceof Error ? error.name : "network_error" });
     return {
       ok: false,
       reason: "network_error",
@@ -270,8 +270,7 @@ export async function callOpenRouterJsonWithStatus<T>({
 }: OpenRouterJsonRequest): Promise<OpenRouterJsonResult<T>> {
   const config = getOpenRouterConfig();
 
-  console.info(`[OpenRouter] configured: ${Boolean(config.apiKey)}`);
-  console.info(`[OpenRouter] model: ${config.model}`);
+  logger.info("openrouter_configuration_checked", { resourceType: context, reason: config.apiKey ? "configured" : "missing_config" });
 
   if (!config.apiKey) {
     return {

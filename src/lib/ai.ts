@@ -1,6 +1,7 @@
 import { PROMPT_VERSION } from "@/lib/evaluations/constants";
 import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
 import { callOpenRouterJsonWithStatus } from "@/lib/openrouter";
+import { logger } from "@/lib/logger";
 import { getCandidateRecommendation } from "@/lib/recommendations";
 import { clamp } from "@/lib/utils";
 
@@ -323,7 +324,7 @@ async function analyzeWithOpenRouter(
 
   const validated = validateCandidateAnalysisResponse(result.data);
   if (!validated.success) {
-    console.warn(`[OpenRouter] candidate analysis failed schema validation: ${validated.error}`);
+    logger.warn("openrouter_analysis_schema_invalid", { resourceType: "candidate_analysis", reason: "schema_validation" });
     return null;
   }
 

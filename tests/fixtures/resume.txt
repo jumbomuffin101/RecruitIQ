@@ -1,0 +1,9 @@
+Taylor Quinn
+Brooklyn, NY | taylor.quinn@example.test | +1 (555) 010-2026
+
+EXPERIENCE
+Software Engineer, Atlas Systems
+Built TypeScript APIs with PostgreSQL and Docker.
+
+SKILLS
+TypeScript, PostgreSQL, React, AWS, Docker
