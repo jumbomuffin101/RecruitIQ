@@ -12,14 +12,33 @@ async function signInAs(page: import("@playwright/test").Page, user: "admin" | "
   await expect(page).toHaveURL(/\/dashboard/);
 }
 
+async function getResumeUpload(page: import("@playwright/test").Page) {
+  await expect(page).toHaveURL(/\/candidates/);
+  await expect(page.getByRole("button", { name: "Upload resume" })).toBeVisible();
+  const upload = page.getByLabel("Upload resume file");
+  await expect(upload).toHaveCount(1);
+  await expect(upload).toBeAttached();
+  await expect(upload).toBeEnabled();
+  await expect(upload).toHaveAttribute("data-hydrated", "true");
+  await expect(upload).toHaveAttribute("accept", ".pdf,.txt,application/pdf,text/plain");
+  return upload;
+}
+
 test("administrator can parse a TXT resume before reviewing candidate fields", async ({ page }) => {
   const resumePath = path.join(fixtures, "resume.txt");
   expect(fs.existsSync(resumePath)).toBe(true);
   await signInAs(page, "admin");
   await page.goto("/candidates");
-  const parseResponse = page.waitForResponse((response) => response.url().includes("/api/resume/parse"));
-  await page.locator('input[type="file"]').setInputFiles(resumePath);
-  expect((await parseResponse).status()).toBe(200);
+  const upload = await getResumeUpload(page);
+  const [parseResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/resume/parse") &&
+        response.request().method() === "POST",
+    ),
+    upload.setInputFiles(resumePath),
+  ]);
+  expect(parseResponse.status()).toBe(200);
   await expect(page.getByText("resume.txt")).toBeVisible();
   await expect(page.getByText("Text extracted")).toBeVisible();
   await page.getByRole("button", { name: "Extract Candidate Details" }).click();
@@ -32,13 +51,27 @@ test("administrator can parse a text-based PDF resume and unsupported uploads ar
   expect(fs.existsSync(pdfPath)).toBe(true);
   await signInAs(page, "admin");
   await page.goto("/candidates");
-  const parseResponse = page.waitForResponse((response) => response.url().includes("/api/resume/parse"));
-  await page.locator('input[type="file"]').setInputFiles(pdfPath);
-  expect((await parseResponse).status()).toBe(200);
+  const upload = await getResumeUpload(page);
+  const [parseResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/resume/parse") &&
+        response.request().method() === "POST",
+    ),
+    upload.setInputFiles(pdfPath),
+  ]);
+  expect(parseResponse.status()).toBe(200);
   await expect(page.getByText("resume.pdf")).toBeVisible();
   await expect(page.getByText("Text extracted")).toBeVisible();
-  await page.locator('input[type="file"]').setInputFiles(path.join(fixtures, "unsupported.resume"));
+  const unsupportedPath = path.join(fixtures, "unsupported.resume");
+  expect(fs.existsSync(unsupportedPath)).toBe(true);
+  let unsupportedRequestIssued = false;
+  page.on("request", (request) => {
+    if (request.url().includes("/api/resume/parse")) unsupportedRequestIssued = true;
+  });
+  await upload.setInputFiles(unsupportedPath);
   await expect(page.getByText("Choose a PDF or TXT resume, or paste the resume text manually below.")).toBeVisible();
+  expect(unsupportedRequestIssued).toBe(false);
 });
 
 test("interviewer cannot see hiring-management forms", async ({ page }) => {

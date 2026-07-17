@@ -17,7 +17,7 @@ test("unauthenticated hiring routes redirect to sign in", async ({ page }) => {
 test("test administrator reaches the dashboard and can sign out", async ({ page }) => {
   await signInAs(page, "admin");
   await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByText("RecruitIQ Test A")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("RecruitIQ Test A")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/dashboard");
@@ -30,5 +30,5 @@ test("a user without an organization completes onboarding as an administrator", 
   await page.getByLabel("Organization name").fill("Onboarding Test Workspace");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByText("Onboarding Test Workspace")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("Onboarding Test Workspace")).toBeVisible();
 });

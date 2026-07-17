@@ -28,7 +28,7 @@ jobs:
       DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/recruitiq_test?schema=public
       AUTH_SECRET: recruitiq-ci-auth-secret-not-for-production
       AUTH_TRUST_HOST: "true"
-      AUTH_URL: http://127.0.0.1:3100
+      AUTH_URL: http://localhost:3100
       AUTH_GITHUB_ID: ci-placeholder
       AUTH_GITHUB_SECRET: ci-placeholder
       RECRUITIQ_TEST_AUTH: "true"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileCheck2, FileText, LoaderCircle, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,10 @@ export function ResumeUploadField({ value, onTextChange }: { value: string; onTe
   const [error, setError] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.setAttribute("data-hydrated", "true");
+  }, []);
 
   const parseFile = useCallback(async (file: File) => {
     setError("");
@@ -45,6 +49,7 @@ export function ResumeUploadField({ value, onTextChange }: { value: string; onTe
     <div className="space-y-3">
       <div
         role="button"
+        aria-label="Upload resume"
         tabIndex={0}
         onClick={() => inputRef.current?.click()}
         onKeyDown={(event) => {
@@ -68,6 +73,8 @@ export function ResumeUploadField({ value, onTextChange }: { value: string; onTe
         <input
           ref={inputRef}
           type="file"
+          aria-label="Upload resume file"
+          data-hydrated="false"
           accept=".pdf,.txt,application/pdf,text/plain"
           className="sr-only"
           onChange={(event) => {
