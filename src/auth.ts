@@ -33,6 +33,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       ]
     : [GitHub],
   session: { strategy: testAuthEnabled ? "jwt" : "database" },
+  // The credentials fixture provider only runs against the local Playwright host.
+  trustHost: testAuthEnabled ? true : undefined,
   callbacks: {
     session({ session, user, token }) {
       const userId = user?.id ?? token?.sub;

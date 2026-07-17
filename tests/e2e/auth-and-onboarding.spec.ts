@@ -2,8 +2,10 @@ import { expect, test } from "@playwright/test";
 
 async function signInAs(page: import("@playwright/test").Page, user: "admin" | "onboarding") {
   await page.goto("/sign-in");
+  await expect(page.getByTestId("test-sign-in")).toBeVisible();
   await page.getByTestId("test-user-key").selectOption(user);
   await page.getByTestId("test-sign-in").click();
+  await expect(page).toHaveURL(user === "onboarding" ? /\/onboarding/ : /\/dashboard/);
 }
 
 test("unauthenticated hiring routes redirect to sign in", async ({ page }) => {
@@ -18,6 +20,8 @@ test("test administrator reaches the dashboard and can sign out", async ({ page 
   await expect(page.getByText("RecruitIQ Test A")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/$/);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/sign-in/);
 });
 
 test("a user without an organization completes onboarding as an administrator", async ({ page }) => {

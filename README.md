@@ -281,13 +281,13 @@ Structured server logs record authentication and authorization denials, readines
 
 Deployment sequence:
 
-1. Configure `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, and optional OpenRouter variables.
+1. Configure `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_TRUST_HOST=true` when required by your host, and optional OpenRouter variables.
 2. Configure GitHub OAuth callback: `https://<deployment-domain>/api/auth/callback/github`.
 3. Run the reviewed migration with `npx prisma migrate deploy`.
 4. Deploy the app, then check `/api/health`, `/api/readiness`, authenticated sign-in, and a small hiring workflow.
 5. Roll back application code independently when needed. Use reviewed forward migrations rather than destructive database rollbacks.
 
-Public routes: `/`, `/sign-in`, `/api/health`, and `/api/readiness`. Hiring pages and internal APIs require an Auth.js session. `DATABASE_URL` is required for data access; normal authentication requires `AUTH_SECRET`, `AUTH_GITHUB_ID`, and `AUTH_GITHUB_SECRET`. The deterministic evaluation path remains active when OpenRouter is absent or fails.
+Public routes: `/`, `/sign-in`, `/api/health`, and `/api/readiness`. Hiring pages and internal APIs require an Auth.js session. `DATABASE_URL` is required for data access; normal authentication requires `AUTH_SECRET`, `AUTH_GITHUB_ID`, and `AUTH_GITHUB_SECRET`. `AUTH_TRUST_HOST=true` is used by the isolated Playwright host and may be needed outside trusted hosting platforms. The deterministic evaluation path remains active when OpenRouter is absent or fails.
 
 ```text
 Browser -> Auth.js session -> organization context -> Server Action / Route Handler

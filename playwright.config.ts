@@ -22,12 +22,15 @@ export default defineConfig({
   webServer: {
     command: "npm run dev -- --port 3100",
     url: "http://127.0.0.1:3100/api/health",
-    reuseExistingServer: !process.env.CI,
+    // Never attach E2E to a developer server that may have a different auth configuration.
+    reuseExistingServer: false,
     timeout: 120_000,
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl,
       AUTH_SECRET: "recruitiq-e2e-test-secret-not-for-production",
+      AUTH_TRUST_HOST: "true",
+      AUTH_URL: "http://127.0.0.1:3100",
       RECRUITIQ_TEST_AUTH: "true",
       OPENROUTER_API_KEY: "",
     },
