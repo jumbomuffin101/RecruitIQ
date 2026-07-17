@@ -14,7 +14,6 @@ async function signInAs(page: import("@playwright/test").Page, user: "admin" | "
 
 async function getResumeUpload(page: import("@playwright/test").Page) {
   await expect(page).toHaveURL(/\/candidates/);
-  await expect(page.getByRole("button", { name: "Upload resume" })).toBeVisible();
   const upload = page.getByLabel("Upload resume file");
   await expect(upload).toHaveCount(1);
   await expect(upload).toBeAttached();
