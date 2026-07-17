@@ -1,5 +1,14 @@
 import { PrismaClient, UserRole } from "@prisma/client";
-import { TEST_AUTH_USER_EMAILS } from "@/lib/test-auth";
+
+export const TEST_CLERK_IDENTITIES = {
+  organizationA: { id: process.env.E2E_CLERK_ORG_A_ID ?? "org_recruitiq_test_a", name: process.env.E2E_CLERK_ORG_A_NAME ?? "RecruitIQ Test A" },
+  organizationB: { id: process.env.E2E_CLERK_ORG_B_ID ?? "org_recruitiq_test_b", name: process.env.E2E_CLERK_ORG_B_NAME ?? "RecruitIQ Test B" },
+  admin: { id: process.env.E2E_CLERK_ADMIN_USER_ID ?? "user_recruitiq_test_admin", email: process.env.E2E_CLERK_ADMIN_EMAIL ?? "admin@recruitiq.test" },
+  recruiter: { id: process.env.E2E_CLERK_RECRUITER_USER_ID ?? "user_recruitiq_test_recruiter", email: process.env.E2E_CLERK_RECRUITER_EMAIL ?? "recruiter@recruitiq.test" },
+  interviewer: { id: process.env.E2E_CLERK_INTERVIEWER_USER_ID ?? "user_recruitiq_test_interviewer", email: process.env.E2E_CLERK_INTERVIEWER_EMAIL ?? "interviewer@recruitiq.test" },
+  onboarding: { id: process.env.E2E_CLERK_ONBOARDING_USER_ID ?? "user_recruitiq_test_onboarding", email: process.env.E2E_CLERK_ONBOARDING_EMAIL ?? "onboarding@recruitiq.test" },
+  otherAdmin: { id: process.env.E2E_CLERK_OTHER_ADMIN_USER_ID ?? "user_recruitiq_test_other_admin", email: process.env.E2E_CLERK_OTHER_ADMIN_EMAIL ?? "other-admin@recruitiq.test" },
+} as const;
 
 export function getTestDatabaseUrl() {
   const databaseUrl = process.env.DATABASE_URL_TEST?.trim();
@@ -39,19 +48,19 @@ export const testIds = {
 } as const;
 
 export async function seedTestDatabase(prisma: PrismaClient) {
-  await prisma.user.deleteMany({ where: { email: { in: Object.values(TEST_AUTH_USER_EMAILS) } } });
+  await prisma.user.deleteMany({ where: { clerkUserId: { in: [TEST_CLERK_IDENTITIES.admin.id, TEST_CLERK_IDENTITIES.recruiter.id, TEST_CLERK_IDENTITIES.interviewer.id, TEST_CLERK_IDENTITIES.onboarding.id, TEST_CLERK_IDENTITIES.otherAdmin.id] } } });
   await prisma.organization.deleteMany({ where: { slug: { in: ["recruitiq-test-a", "recruitiq-test-b"] } } });
 
-  const organizationA = await prisma.organization.create({ data: { id: testIds.organizationA, name: "RecruitIQ Test A", slug: "recruitiq-test-a" } });
-  const organizationB = await prisma.organization.create({ data: { id: testIds.organizationB, name: "RecruitIQ Test B", slug: "recruitiq-test-b" } });
+  const organizationA = await prisma.organization.create({ data: { id: testIds.organizationA, clerkOrganizationId: TEST_CLERK_IDENTITIES.organizationA.id, name: TEST_CLERK_IDENTITIES.organizationA.name, slug: "recruitiq-test-a" } });
+  const organizationB = await prisma.organization.create({ data: { id: testIds.organizationB, clerkOrganizationId: TEST_CLERK_IDENTITIES.organizationB.id, name: TEST_CLERK_IDENTITIES.organizationB.name, slug: "recruitiq-test-b" } });
 
   await prisma.user.createMany({
     data: [
-      { name: "Test Admin", email: TEST_AUTH_USER_EMAILS.admin, organizationId: organizationA.id, role: UserRole.ADMIN },
-      { name: "Test Recruiter", email: TEST_AUTH_USER_EMAILS.recruiter, organizationId: organizationA.id, role: UserRole.RECRUITER },
-      { name: "Test Interviewer", email: TEST_AUTH_USER_EMAILS.interviewer, organizationId: organizationA.id, role: UserRole.INTERVIEWER },
-      { name: "New Workspace Owner", email: TEST_AUTH_USER_EMAILS.onboarding, role: UserRole.RECRUITER },
-      { name: "Other Admin", email: TEST_AUTH_USER_EMAILS.otherAdmin, organizationId: organizationB.id, role: UserRole.ADMIN },
+      { clerkUserId: TEST_CLERK_IDENTITIES.admin.id, name: "Test Admin", email: TEST_CLERK_IDENTITIES.admin.email, organizationId: organizationA.id, role: UserRole.ADMIN },
+      { clerkUserId: TEST_CLERK_IDENTITIES.recruiter.id, name: "Test Recruiter", email: TEST_CLERK_IDENTITIES.recruiter.email, organizationId: organizationA.id, role: UserRole.RECRUITER },
+      { clerkUserId: TEST_CLERK_IDENTITIES.interviewer.id, name: "Test Interviewer", email: TEST_CLERK_IDENTITIES.interviewer.email, organizationId: organizationA.id, role: UserRole.INTERVIEWER },
+      { clerkUserId: TEST_CLERK_IDENTITIES.onboarding.id, name: "New Workspace Owner", email: TEST_CLERK_IDENTITIES.onboarding.email, role: UserRole.RECRUITER },
+      { clerkUserId: TEST_CLERK_IDENTITIES.otherAdmin.id, name: "Other Admin", email: TEST_CLERK_IDENTITIES.otherAdmin.email, organizationId: organizationB.id, role: UserRole.ADMIN },
     ],
   });
 

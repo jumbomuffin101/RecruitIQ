@@ -1,15 +1,18 @@
 import { AppSidebar, MobileNav } from "@/components/AppSidebar";
 import { UserMenu } from "@/components/UserMenu";
-import { getCurrentUserContext } from "@/lib/auth-context";
+import { AuthenticationRequiredError, getCurrentUserContext, OnboardingRequiredError } from "@/lib/auth-context";
 import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let context;
   try {
     context = await getCurrentUserContext();
   } catch (error) {
-    if (error instanceof Error && error.message.includes("organization setup")) redirect("/onboarding");
-    redirect("/sign-in");
+    if (error instanceof OnboardingRequiredError) redirect("/onboarding");
+    if (error instanceof AuthenticationRequiredError) redirect("/clerk/sign-in");
+    throw error;
   }
   return (
     <div className="min-h-screen bg-slate-50">

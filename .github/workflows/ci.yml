@@ -26,12 +26,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recruitiq_test?schema=public
       DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/recruitiq_test?schema=public
-      AUTH_SECRET: recruitiq-ci-auth-secret-not-for-production
-      AUTH_TRUST_HOST: "true"
-      AUTH_URL: http://localhost:3100
-      AUTH_GITHUB_ID: ci-placeholder
-      AUTH_GITHUB_SECRET: ci-placeholder
-      RECRUITIQ_TEST_AUTH: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,5 +40,44 @@ jobs:
       - run: npm test
       - run: npm run test:integration
       - run: npm run build
+
+  clerk-e2e:
+    needs: verify
+    if: ${{ secrets.CLERK_TEST_PUBLISHABLE_KEY != '' && secrets.CLERK_TEST_SECRET_KEY != '' && secrets.E2E_CLERK_ADMIN_EMAIL != '' && secrets.E2E_CLERK_INTERVIEWER_EMAIL != '' && secrets.E2E_CLERK_ONBOARDING_EMAIL != '' && secrets.E2E_CLERK_ORG_A_ID != '' && secrets.E2E_CLERK_ORG_B_ID != '' && secrets.E2E_CLERK_ADMIN_USER_ID != '' && secrets.E2E_CLERK_INTERVIEWER_USER_ID != '' }}
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recruitiq_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recruitiq_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recruitiq_test?schema=public
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/recruitiq_test?schema=public
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_TEST_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_TEST_SECRET_KEY }}
+      E2E_CLERK_ADMIN_EMAIL: ${{ secrets.E2E_CLERK_ADMIN_EMAIL }}
+      E2E_CLERK_INTERVIEWER_EMAIL: ${{ secrets.E2E_CLERK_INTERVIEWER_EMAIL }}
+      E2E_CLERK_ONBOARDING_EMAIL: ${{ secrets.E2E_CLERK_ONBOARDING_EMAIL }}
+      E2E_CLERK_ORG_A_ID: ${{ secrets.E2E_CLERK_ORG_A_ID }}
+      E2E_CLERK_ORG_B_ID: ${{ secrets.E2E_CLERK_ORG_B_ID }}
+      E2E_CLERK_ADMIN_USER_ID: ${{ secrets.E2E_CLERK_ADMIN_USER_ID }}
+      E2E_CLERK_INTERVIEWER_USER_ID: ${{ secrets.E2E_CLERK_INTERVIEWER_USER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

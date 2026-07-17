@@ -45,8 +45,6 @@ const features = [
 ];
 
 export default function LandingPage() {
-  const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-
   return (
     <main className="min-h-screen bg-white text-slate-950">
       <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
@@ -57,16 +55,12 @@ export default function LandingPage() {
           RecruitIQ
         </Link>
         <div className="flex items-center gap-2">
-          {clerkEnabled ? (
-            <>
-              <Link href="/clerk/sign-in" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
-                Sign in
-              </Link>
-              <Link href="/clerk/sign-up" className="hidden rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:inline-flex">
-                Sign up
-              </Link>
-            </>
-          ) : null}
+          <Link href="/clerk/sign-in" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
+            Sign in
+          </Link>
+          <Link href="/clerk/sign-up" className="hidden rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:inline-flex">
+            Sign up
+          </Link>
           <Link href="/quick-start" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
             Quick Start
           </Link>

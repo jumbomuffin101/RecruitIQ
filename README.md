@@ -155,7 +155,7 @@ Every application is created at `APPLIED` with an initial `ApplicationStatusHist
 - Amazon Aurora PostgreSQL
 - Vercel
 - Optional OpenRouter API
-- Auth.js with GitHub OAuth and Prisma database sessions
+- Clerk for authentication, sessions, user profiles, and organization membership
 - `unpdf` serverless PDF text extraction
 
 ## Important Files
@@ -184,9 +184,10 @@ Every application is created at `APPLIED` with an initial `ApplicationStatusHist
 
 ```bash
 DATABASE_URL=""
-AUTH_SECRET=
-AUTH_GITHUB_ID=
-AUTH_GITHUB_SECRET=
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/clerk/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/clerk/sign-up
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=openai/gpt-oss-120b:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
@@ -195,7 +196,7 @@ OPENROUTER_SITE_URL=
 ```
 
 - `DATABASE_URL` is required and should point to Amazon Aurora PostgreSQL in production.
-- `AUTH_SECRET`, `AUTH_GITHUB_ID`, and `AUTH_GITHUB_SECRET` configure Auth.js with GitHub OAuth. Generate `AUTH_SECRET` with a secure random value; none of these values are exposed to the browser.
+- Clerk configuration is required for normal development and production. Only `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is browser-visible; `CLERK_SECRET_KEY` is server-only.
 - `OPENROUTER_API_KEY` is optional and is only read by server-side code.
 - OpenRouter is used server-side to improve candidate summaries, role match explanations, strengths, gaps, next steps, and interview kits.
 - Fit scores remain explainable and deterministic based on skill and requirement matching.
@@ -217,11 +218,13 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-### Authentication and Organization Isolation
+### Clerk Authentication and Organization Isolation
 
-RecruitIQ uses Auth.js with GitHub OAuth and Prisma-backed database sessions. Authentication determines the `User`; the user determines the `Organization`; every hiring query and mutation is scoped to that organization. Client-supplied organization IDs are never accepted for authorization.
+Clerk is the sole source of truth for authentication, sessions, sign-in/sign-up, social connections, active organizations, and organization roles. Configure Google and GitHub connections in the Clerk Dashboard; no provider-specific application code is required. `/clerk/sign-in` and `/clerk/sign-up` render Clerk's hosted components.
 
-The first authenticated user without an organization is redirected to `/onboarding`, where a workspace is created and that user becomes its `ADMIN`. New workspaces begin empty; seeded Northstar Labs data is never copied into a real organization automatically.
+Prisma remains the source of truth for hiring data and internal foreign keys. On each authenticated workspace request, RecruitIQ derives `userId`, `orgId`, and organization role from Clerk, then idempotently mirrors the Clerk user and organization into Prisma using `User.clerkUserId` and `Organization.clerkOrganizationId`. Server Actions and data loaders derive the active organization from this context; they never accept organization IDs from the client for authorization.
+
+The first signed-in user without an active Clerk organization is redirected to `/onboarding`, which uses Clerk's organization creation/selection UI. Clerk assigns the creator its organization admin role; the next workspace request mirrors that organization and user into Prisma. New workspaces begin empty.
 
 Roles are intentionally small:
 
@@ -229,7 +232,21 @@ Roles are intentionally small:
 - `RECRUITER`: create and manage jobs, candidates, applications, evaluations, and scorecards.
 - `INTERVIEWER`: view context and submit interview feedback; cannot edit jobs, rubrics, candidates, or pipeline stages.
 
-Development seed data creates Northstar Labs with an `ADMIN` record for `alex@northstarlabs.example`. To view that workspace through OAuth, associate the signed-in development user with the seeded organization through a local database tool; production has no demo auth bypass.
+Clerk role mapping is server-side and least-privilege: `org:admin` -> `ADMIN`, `org:recruiter` -> `RECRUITER`, `org:interviewer` -> `INTERVIEWER`, and Clerk's default `org:member` -> `INTERVIEWER`. Unknown roles are denied rather than trusted.
+
+### Existing Workspace Linking
+
+Existing RecruitIQ organizations are never auto-matched by email or name. Before an existing workspace can be used through Clerk, link the known Prisma and Clerk IDs explicitly:
+
+```bash
+npx tsx scripts/link-clerk-identity.ts \
+  --organization-id <prisma-org-id> \
+  --clerk-organization-id <clerk-org-id> \
+  --user-id <prisma-user-id> \
+  --clerk-user-id <clerk-user-id>
+```
+
+The command refuses conflicting links. This preserves the existing organization, its hiring data, and internal attribution. Auth.js-era `Account`, `Session`, and `VerificationToken` tables are retained in PostgreSQL for data safety but are no longer represented in Prisma or used at runtime.
 
 For local PostgreSQL with Docker:
 
@@ -241,9 +258,10 @@ docker compose up -d postgres
 
 1. Import the repository into Vercel.
 2. Add the Aurora PostgreSQL connection string as `DATABASE_URL`.
-3. Optionally configure the OpenRouter variables.
-4. Apply the Prisma schema to the production database.
-5. Seed the sample workspace only when a populated evaluation environment is desired.
+3. Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from the linked Clerk application, then configure approved production domains and social connections in Clerk.
+4. Optionally configure the OpenRouter variables.
+5. Apply the reviewed Prisma migration to the production database.
+6. Seed the sample workspace only when a populated evaluation environment is desired.
 
 Use Prisma migrations for production changes:
 
@@ -268,9 +286,9 @@ npm run test:e2e
 
 Integration tests use two organizations with fixed users, jobs, candidates, applications, and a scorecard. They verify foreign organization IDs resolve to no record and that the evaluation service rejects cross-organization input before persistence.
 
-Playwright uses the same disposable database. It enables a credentials-only fixture provider with `RECRUITIQ_TEST_AUTH=true`; the provider is hard-disabled when `NODE_ENV=production`, has no production fallback, and is hidden from normal product UI. Browser tests do not call GitHub OAuth or OpenRouter. Resume fixtures are fictional.
+Playwright uses Clerk's official `@clerk/testing` helpers with a dedicated Clerk development instance. Configure `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `E2E_CLERK_ADMIN_EMAIL`, `E2E_CLERK_INTERVIEWER_EMAIL`, `E2E_CLERK_ONBOARDING_EMAIL`, and matching Clerk organization/user IDs for the disposable database seed. The `clerk-e2e` CI job runs only when those test-only GitHub secrets are configured; normal CI never exposes production Clerk secrets.
 
-GitHub Actions in `.github/workflows/ci.yml` runs against a PostgreSQL 16 service: Prisma generation and validation, `prisma migrate deploy` from an empty database, linting, unit and integration tests, build, then Chromium Playwright. `npm run ci` runs the non-browser portion locally.
+GitHub Actions in `.github/workflows/ci.yml` runs Prisma generation and validation, migrations from an empty PostgreSQL 16 database, linting, unit tests, integration tests, and a build. The separate Clerk E2E job uses test-only secrets and Chromium Playwright. `npm run ci` runs the non-browser portion locally.
 
 ### Health and Deployment
 
@@ -281,16 +299,16 @@ Structured server logs record authentication and authorization denials, readines
 
 Deployment sequence:
 
-1. Configure `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_TRUST_HOST=true` when required by your host, and optional OpenRouter variables.
-2. Configure GitHub OAuth callback: `https://<deployment-domain>/api/auth/callback/github`.
+1. Configure `DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and optional OpenRouter variables.
+2. Add the Vercel production and preview domains to the Clerk application; enable Google and/or GitHub in Clerk when desired.
 3. Run the reviewed migration with `npx prisma migrate deploy`.
 4. Deploy the app, then check `/api/health`, `/api/readiness`, authenticated sign-in, and a small hiring workflow.
 5. Roll back application code independently when needed. Use reviewed forward migrations rather than destructive database rollbacks.
 
-Public routes: `/`, `/sign-in`, `/api/health`, and `/api/readiness`. Hiring pages and internal APIs require an Auth.js session. `DATABASE_URL` is required for data access; normal authentication requires `AUTH_SECRET`, `AUTH_GITHUB_ID`, and `AUTH_GITHUB_SECRET`. `AUTH_TRUST_HOST=true` is used by the isolated Playwright host and may be needed outside trusted hosting platforms. The deterministic evaluation path remains active when OpenRouter is absent or fails.
+Public routes: `/`, `/clerk/sign-in`, `/clerk/sign-up`, `/api/health`, and `/api/readiness`. Hiring pages and internal APIs require a Clerk session; workspace data additionally requires an active Clerk organization. The deterministic evaluation path remains active when OpenRouter is absent or fails.
 
 ```text
-Browser -> Auth.js session -> organization context -> Server Action / Route Handler
+Browser -> Clerk session and active organization -> Clerk-to-Prisma identity mirror -> Server Action / Route Handler
 -> authorization policy -> Prisma -> PostgreSQL
 
 Authenticated recruiter -> candidate/job ownership verification -> deterministic evaluation
@@ -338,7 +356,7 @@ Authenticated recruiter -> candidate/job ownership verification -> deterministic
 
 ## Known Limitations
 
-- GitHub OAuth and browser flows require configured credentials and a disposable PostgreSQL test database for local E2E execution.
+- Clerk browser flows require configured Clerk keys, enabled Clerk Organizations, and a disposable PostgreSQL database for local E2E execution.
 - Candidate editing is not implemented yet.
 - The current resume evidence UI is excerpt-based; it does not highlight text inside a rendered resume.
 - PDF parsing works for text-based PDFs, not scanned image-only resumes.

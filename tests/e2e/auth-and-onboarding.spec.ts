@@ -1,34 +1,33 @@
+import { clerk } from "@clerk/testing/playwright";
 import { expect, test } from "@playwright/test";
 
-async function signInAs(page: import("@playwright/test").Page, user: "admin" | "onboarding") {
-  await page.goto("/sign-in");
-  await expect(page.getByTestId("test-sign-in")).toBeVisible();
-  await page.getByTestId("test-user-key").selectOption(user);
-  await page.getByTestId("test-sign-in").click();
-  await expect(page).toHaveURL(user === "onboarding" ? /\/onboarding/ : /\/dashboard/);
+function requiredEnvironment(name: "E2E_CLERK_ADMIN_EMAIL" | "E2E_CLERK_ONBOARDING_EMAIL") {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required for Clerk E2E tests.`);
+  return value;
 }
 
-test("unauthenticated hiring routes redirect to sign in", async ({ page }) => {
+async function signInAs(page: import("@playwright/test").Page, email: string) {
+  await page.goto("/");
+  await clerk.signIn({ page, emailAddress: email });
+}
+
+test("unauthenticated hiring routes redirect to Clerk sign in", async ({ page }) => {
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/sign-in/);
-  await expect(page.getByRole("heading", { name: "Sign in to your hiring workspace" })).toBeVisible();
+  await expect(page).toHaveURL(/\/clerk\/sign-in/);
 });
 
-test("test administrator reaches the dashboard and can sign out", async ({ page }) => {
-  await signInAs(page, "admin");
-  await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByRole("complementary").getByText("RecruitIQ Test A")).toBeVisible();
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/$/);
+test("Clerk administrator reaches the dashboard and can sign out", async ({ page }) => {
+  await signInAs(page, requiredEnvironment("E2E_CLERK_ADMIN_EMAIL"));
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/sign-in/);
+  await expect(page).toHaveURL(/\/dashboard/);
+  await clerk.signOut({ page });
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/clerk\/sign-in/);
 });
 
-test("a user without an organization completes onboarding as an administrator", async ({ page }) => {
-  await signInAs(page, "onboarding");
-  await expect(page).toHaveURL(/\/onboarding/);
-  await page.getByLabel("Organization name").fill("Onboarding Test Workspace");
-  await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByRole("complementary").getByText("Onboarding Test Workspace")).toBeVisible();
+test("a signed-in user without an active organization sees Clerk onboarding", async ({ page }) => {
+  await signInAs(page, requiredEnvironment("E2E_CLERK_ONBOARDING_EMAIL"));
+  await page.goto("/onboarding");
+  await expect(page.getByRole("heading", { name: "Choose your organization" })).toBeVisible();
 });
