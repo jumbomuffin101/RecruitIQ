@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingAuthActions } from "@/components/LandingAuthActions";
 import {
   ArrowRight,
   BarChart3,
@@ -55,12 +56,7 @@ export default function LandingPage() {
           RecruitIQ
         </Link>
         <div className="flex items-center gap-2">
-          <Link href="/clerk/sign-in" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
-            Sign in
-          </Link>
-          <Link href="/clerk/sign-up" className="hidden rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:inline-flex">
-            Sign up
-          </Link>
+          <LandingAuthActions />
           <Link href="/quick-start" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 sm:inline-flex">
             Quick Start
           </Link>
