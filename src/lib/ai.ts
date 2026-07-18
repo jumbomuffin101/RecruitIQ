@@ -269,7 +269,7 @@ async function analyzeWithOpenRouter(
 
   const validated = validateCandidateAnalysisResponse(result.data);
   if (!validated.success) {
-    logger.warn("openrouter_analysis_schema_invalid", { resourceType: "candidate_analysis", reason: "schema_validation" });
+    logger.warn("openrouter_analysis_schema_invalid", { resourceType: "candidate_analysis", reason: "invalid_ai_output" });
     return null;
   }
 

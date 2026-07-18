@@ -12,6 +12,11 @@ type LogFields = {
   errorClass?: string;
   prismaCode?: string;
   scoreTrace?: unknown;
+  baseUrl?: string;
+  endpoint?: string;
+  model?: string;
+  errorCode?: string;
+  errorMessage?: string;
 };
 
 function emit(level: "info" | "warn" | "error", event: string, fields: LogFields = {}) {

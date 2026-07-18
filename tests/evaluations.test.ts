@@ -15,7 +15,7 @@ import { DEFAULT_RUBRIC_WEIGHTS } from "@/lib/evaluations/constants";
 import { rubricInputSchema } from "@/lib/jobs/schemas";
 import { findEvidenceForRequirement } from "@/lib/evaluations/evidence";
 import { clamp } from "@/lib/utils";
-import { classifyOpenRouterStatus, parseOpenRouterJson } from "@/lib/openrouter";
+import { classifyOpenRouterFailure, classifyOpenRouterStatus, parseOpenRouterJson, resolveOpenRouterEndpoint } from "@/lib/openrouter";
 import { getCandidateRecommendation, getDeterministicRecommendedStage } from "@/lib/recommendations";
 import { getInterviewValidationOutcome, getValidationSummary } from "@/lib/interviews/validation";
 import { countApplicationsByStage, getApplicationConversions } from "@/lib/applications/metrics";
@@ -180,6 +180,29 @@ test("OpenRouter retry classification distinguishes transient and permanent erro
   assert.deepEqual(classifyOpenRouterStatus(429), { reason: "rate_limited", retryable: true });
   assert.deepEqual(classifyOpenRouterStatus(503), { reason: "server_error", retryable: true });
   assert.deepEqual(classifyOpenRouterStatus(400), { reason: "client_error", retryable: false });
+});
+
+test("OpenRouter endpoint resolution produces one canonical chat-completions URL", () => {
+  const endpoint = "https://openrouter.ai/api/v1/chat/completions";
+  assert.equal(resolveOpenRouterEndpoint("https://openrouter.ai/api/v1"), endpoint);
+  assert.equal(resolveOpenRouterEndpoint("https://openrouter.ai/api/v1/"), endpoint);
+  assert.equal(resolveOpenRouterEndpoint(endpoint), endpoint);
+  assert.throws(() => resolveOpenRouterEndpoint(`${endpoint}/chat/completions`), /OPENROUTER_BASE_URL/);
+  assert.throws(() => resolveOpenRouterEndpoint("https://openrouter.ai/api/v1/api/v1"), /OPENROUTER_BASE_URL/);
+  assert.throws(() => resolveOpenRouterEndpoint("http://openrouter.ai/api/v1"), /HTTPS/);
+  assert.throws(() => resolveOpenRouterEndpoint("https://proxy.example.com/api/v1"), /openrouter.ai/);
+});
+
+test("OpenRouter provider failures retain actionable, sanitized categories", () => {
+  assert.deepEqual(classifyOpenRouterFailure(401), { reason: "authentication_error", retryable: false });
+  assert.deepEqual(classifyOpenRouterFailure(402), { reason: "billing_error", retryable: false });
+  assert.deepEqual(classifyOpenRouterFailure(404), { reason: "endpoint_not_found", retryable: false });
+  assert.deepEqual(
+    classifyOpenRouterFailure(404, { code: "MODEL_NOT_FOUND", message: "No endpoints found for this model." }),
+    { reason: "model_not_found", retryable: false },
+  );
+  assert.deepEqual(classifyOpenRouterFailure(429), { reason: "rate_limited", retryable: true });
+  assert.deepEqual(classifyOpenRouterFailure(500), { reason: "server_error", retryable: true });
 });
 
 test("default rubric totals 100 and invalid totals are rejected", () => {

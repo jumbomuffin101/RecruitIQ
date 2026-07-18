@@ -113,6 +113,8 @@ OpenRouter can improve the recruiter-facing narrative, but it does not determine
 
 OpenRouter is optional. When configured, its output is requested server-side as strict JSON and validated with Zod before narrative fields are persisted. When a provider key is absent, the request times out, the response is invalid, or the provider fails, RecruitIQ continues with deterministic extraction and analysis. API keys and raw resume contents are never logged or sent to the browser.
 
+RecruitIQ resolves `OPENROUTER_BASE_URL` to one canonical Chat Completions endpoint. Use `https://openrouter.ai/api/v1` in Vercel; `https://openrouter.ai/api/v1/chat/completions` is also accepted explicitly. Workspace administrators can call `/api/ai-status?probe=1` to run a minimal server-side connectivity check. The response includes the configured model, endpoint, status, and sanitized provider error information only.
+
 ## Testing
 
 | Layer | Coverage |
@@ -146,7 +148,7 @@ Optional OpenRouter variables:
 
 ```bash
 OPENROUTER_API_KEY=
-OPENROUTER_MODEL=openai/gpt-oss-120b:free
+OPENROUTER_MODEL=openai/gpt-oss-20b:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_APP_NAME=RecruitIQ
 OPENROUTER_SITE_URL=
