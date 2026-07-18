@@ -139,7 +139,7 @@ async function syncPrismaOrganization(clerkOrganizationId: string) {
   const clerk = await clerkClient();
   const clerkOrganization = await clerk.organizations.getOrganization({ organizationId: clerkOrganizationId });
 
-  return prisma.organization.upsert({
+  const organization = await prisma.organization.upsert({
     where: { clerkOrganizationId },
     update: { name: clerkOrganization.name },
     create: {
@@ -148,6 +148,13 @@ async function syncPrismaOrganization(clerkOrganizationId: string) {
       slug: createOrganizationSlug(clerkOrganization.name, clerkOrganizationId),
     },
   });
+
+  logger.info("prisma_organization_synced", {
+    organizationId: organization.id,
+    clerkOrganizationId,
+    reason: "upserted",
+  });
+  return organization;
 }
 
 export async function requireClerkUser() {
@@ -158,6 +165,11 @@ export async function requireClerkUser() {
     throw new AuthenticationRequiredError();
   }
   const user = await syncPrismaUser({ clerkUserId: userId });
+  logger.info("prisma_user_synced", {
+    userId: user.id,
+    clerkUserId: userId,
+    reason: "pre_organization",
+  });
   return { clerkUserId: userId, userId: user.id };
 }
 
@@ -168,16 +180,40 @@ export async function getCurrentUserContext(): Promise<CurrentUserContext> {
     logger.warn("authentication_required");
     throw new AuthenticationRequiredError();
   }
-  if (!orgId) throw new OnboardingRequiredError();
+  if (!orgId) {
+    logger.info("clerk_workspace_context", {
+      clerkUserId: userId,
+      reason: "organization_missing",
+    });
+    throw new OnboardingRequiredError();
+  }
 
   const role = mapClerkOrganizationRole(orgRole);
   if (!role) {
-    logger.warn("authorization_denied", { reason: "unmapped_clerk_role" });
+    logger.warn("authorization_denied", {
+      clerkUserId: userId,
+      clerkOrganizationId: orgId,
+      reason: "unmapped_clerk_role",
+    });
     throw new AuthorizationError();
   }
 
+  logger.info("clerk_workspace_context", {
+    clerkUserId: userId,
+    clerkOrganizationId: orgId,
+    mappedRole: role,
+    reason: "organization_active",
+  });
+
   const organization = await syncPrismaOrganization(orgId);
   const user = await syncPrismaUser({ clerkUserId: userId, organizationId: organization.id, role });
+  logger.info("prisma_user_linked_to_workspace", {
+    userId: user.id,
+    organizationId: organization.id,
+    clerkUserId: userId,
+    clerkOrganizationId: orgId,
+    mappedRole: role,
+  });
 
   return {
     clerkUserId: userId,

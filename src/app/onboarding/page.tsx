@@ -17,7 +17,12 @@ export default async function OnboardingPage() {
     throw error;
   }
 
-  const { orgId } = await auth();
+  const { userId, orgId } = await auth();
+  logger.info("clerk_onboarding_context", {
+    clerkUserId: userId ?? undefined,
+    clerkOrganizationId: orgId ?? undefined,
+    reason: orgId ? "organization_active_redirect_dashboard" : "organization_missing_render_onboarding",
+  });
   if (orgId) redirect("/dashboard");
 
   return (

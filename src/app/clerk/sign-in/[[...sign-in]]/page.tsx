@@ -6,7 +6,6 @@ export default function ClerkSignInPage() {
       path="/clerk/sign-in"
       routing="path"
       signUpUrl="/clerk/sign-up"
-      forceRedirectUrl="/dashboard"
       fallbackRedirectUrl="/dashboard"
     />
   );

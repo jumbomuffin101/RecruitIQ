@@ -6,6 +6,9 @@ type LogFields = {
   operationId?: string;
   status?: number | string;
   reason?: string;
+  clerkUserId?: string;
+  clerkOrganizationId?: string;
+  mappedRole?: string;
 };
 
 function emit(level: "info" | "warn" | "error", event: string, fields: LogFields = {}) {
