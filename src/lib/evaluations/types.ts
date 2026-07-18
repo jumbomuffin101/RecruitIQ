@@ -62,6 +62,21 @@ export type EvaluationScoreBreakdown = {
   hasMissingCritical: boolean;
   categoryScores: CategoryScore[];
   requirementScores: RequirementScore[];
+  scoreTrace: ScoreTraceCategory[];
+};
+
+export type ScoreTraceCategory = {
+  category: EvaluationScoreCategory;
+  maxPoints: number;
+  earnedPoints: number;
+  requirements: Array<{
+    id: string;
+    text: string;
+    matchStatus: RequirementMatchStatus;
+    contribution: number;
+    maxPoints: number;
+    evidence: string[];
+  }>;
 };
 
 export type RubricWeights = {

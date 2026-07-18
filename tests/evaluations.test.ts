@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ApplicationStatus, RequirementCategory, RequirementMatchStatus, RequirementType, UserRole } from "@prisma/client";
+import { ApplicationStatus, EvaluationScoreCategory, RequirementCategory, RequirementMatchStatus, RequirementType, UserRole } from "@prisma/client";
+import { analyzeCandidateForJob } from "@/lib/ai";
 import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
 import {
   calculateCategoryScores,
   calculateEvaluationScoreBreakdown,
   calculateOverallScore,
+  extractRequirementKeywords,
   normalizeRequirementMaxScores,
   parseJobRequirementDrafts,
 } from "@/lib/evaluations/scoring";
@@ -291,4 +293,82 @@ test("role permissions keep interview feedback available without exposing hiring
   assert.equal(canDeleteHiringData(UserRole.ADMIN), true);
   assert.equal(canDeleteHiringData(UserRole.RECRUITER), false);
   assert.equal(canSubmitInterviewFeedback(UserRole.INTERVIEWER), true);
+});
+
+test("SWE internship evaluation uses structured requirements, aliases, and one deterministic fit band", () => {
+  const sweCandidate = {
+    name: "Aryan Rawat",
+    skills: ["Python", "Java", "JavaScript", "TypeScript", "React", "Next.js", "PostgreSQL", "SQL", "REST APIs", "Docker", "AWS", "Git", "CI/CD", "Jenkins"],
+    resumeText: "EDUCATION B.S. Computer Science. EXPERIENCE Software Engineering Intern building production frontend and backend services. PROJECTS Built full-stack software projects using React, NextJS, Postgres, RESTful APIs, Docker, AWS, GitHub Actions, Jenkins, testing, and data structures and algorithms.",
+    resumeSummary: "Computer science student and software engineering intern with full-stack product experience.",
+    experienceSummary: "Software Engineering Intern delivering production backend and frontend work with APIs, SQL, and cloud tooling.",
+    educationSummary: "B.S. Computer Science.",
+    currentTitle: "Software Engineering Intern",
+    currentCompany: "Atlas Labs",
+    projectsSummary: "Built multiple full-stack software projects using React, Next.js, PostgreSQL, Docker, and CI/CD.",
+    status: "APPLIED",
+  };
+  const sweJob = {
+    title: "Software Engineer Intern",
+    description: "Build reliable product features for a SaaS platform.",
+    requirements: "Python, Java, JavaScript, TypeScript; Data Structures and Algorithms; SQL and PostgreSQL; Git and version control; Software Engineering Experience; Computer Science Education; Software Projects; Preferred: React and Next.js; Preferred: REST APIs and backend development; Preferred: AWS, Docker, CI/CD, and testing.",
+  };
+  const requirements = [
+    { id: "languages", text: "Python, Java, JavaScript, and TypeScript", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 10, keywords: ["Python", "Java", "JavaScript", "TypeScript"], isCritical: false, sortOrder: 0 },
+    { id: "algorithms", text: "Data Structures and Algorithms", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 9, keywords: ["Data Structures and Algorithms"], isCritical: false, sortOrder: 1 },
+    { id: "database", text: "SQL and PostgreSQL", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 9, keywords: ["SQL", "PostgreSQL"], isCritical: false, sortOrder: 2 },
+    { id: "git", text: "Git and version control", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 5, keywords: ["Git"], isCritical: false, sortOrder: 3 },
+    { id: "experience", text: "Software Engineering Experience", type: RequirementType.REQUIRED, category: RequirementCategory.EXPERIENCE, weight: 10, keywords: ["Software Engineering Experience"], isCritical: false, sortOrder: 4 },
+    { id: "education", text: "Computer Science Education", type: RequirementType.REQUIRED, category: RequirementCategory.EDUCATION, weight: 10, keywords: ["Computer Science Education"], isCritical: false, sortOrder: 5 },
+    { id: "projects", text: "Software Projects", type: RequirementType.REQUIRED, category: RequirementCategory.PROJECT, weight: 10, keywords: ["Software Projects"], isCritical: false, sortOrder: 6 },
+    { id: "frontend", text: "React and Next.js", type: RequirementType.PREFERRED, category: RequirementCategory.SKILL, weight: 5, keywords: ["React", "Next.js"], isCritical: false, sortOrder: 7 },
+    { id: "apis", text: "REST APIs and backend development", type: RequirementType.PREFERRED, category: RequirementCategory.SKILL, weight: 5, keywords: ["REST APIs"], isCritical: false, sortOrder: 8 },
+    { id: "delivery", text: "AWS, Docker, CI/CD, and testing", type: RequirementType.PREFERRED, category: RequirementCategory.SKILL, weight: 5, keywords: ["AWS", "Docker", "CI/CD", "Testing"], isCritical: false, sortOrder: 9 },
+  ];
+
+  const keywords = extractRequirementKeywords("We are seeking customer communication skills alongside RESTful APIs, GitHub Actions, Postgres, and NextJS.");
+  assert.deepEqual(keywords, ["Next.js", "PostgreSQL", "REST APIs", "CI/CD"]);
+  assert.equal(keywords.includes("Seeking"), false);
+  assert.equal(keywords.includes("Customer"), false);
+  assert.equal(keywords.includes("Communication"), false);
+  const fallbackDrafts = parseJobRequirementDrafts("We are seeking customer communication skills alongside RESTful APIs, GitHub Actions, Postgres, and NextJS.");
+  assert.equal(fallbackDrafts.some((draft) => /\b(seeking|customer|communication)\b/i.test(draft.text)), false);
+
+  const breakdown = calculateEvaluationScoreBreakdown({ candidate: sweCandidate, job: sweJob, requirements });
+  const categories = new Map(breakdown.categoryScores.map((category) => [category.category, category]));
+  assert.ok((categories.get(EvaluationScoreCategory.RELEVANT_EXPERIENCE)?.score ?? 0) > 0);
+  assert.ok((categories.get(EvaluationScoreCategory.PROJECT_ALIGNMENT)?.score ?? 0) > 0);
+  assert.ok((categories.get(EvaluationScoreCategory.EDUCATION)?.score ?? 0) > 0);
+  assert.ok((categories.get(EvaluationScoreCategory.PREFERRED_QUALIFICATIONS)?.score ?? 0) > 0);
+  assert.ok(breakdown.overallScore >= 85 && breakdown.overallScore <= 90);
+  assert.equal(breakdown.scoreTrace.some((category) => category.requirements.some((requirement) => requirement.text === "seeking")), false);
+
+  const analysis = analyzeCandidateForJob(sweCandidate, sweJob, { requirements, breakdown });
+  assert.equal(analysis.fitScore, breakdown.overallScore);
+  assert.match(analysis.summary, /strong fit/i);
+  assert.notEqual(analysis.recommendedStage, "REJECTED");
+});
+
+test("limited alignment never produces strong-fit language", () => {
+  const lowCandidate = { ...candidate, skills: [], resumeText: "Entry-level generalist profile.", experienceSummary: "", projectsSummary: "", educationSummary: "" };
+  const requirements = [{ id: "python", text: "Python", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 10, keywords: ["Python"], isCritical: false, sortOrder: 0 }];
+  const breakdown = calculateEvaluationScoreBreakdown({ candidate: lowCandidate, job, requirements });
+  const analysis = analyzeCandidateForJob(lowCandidate, job, { requirements, breakdown });
+
+  assert.ok(analysis.fitScore < 50);
+  assert.equal(analysis.recommendedStage, "REJECTED");
+  assert.equal(analysis.nextStep, "Reject candidate");
+  assert.doesNotMatch(analysis.summary, /strong fit/i);
+});
+
+test("legacy prose fragments do not consume structured scoring weight", () => {
+  const requirements = [
+    { id: "python", text: "Python", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 10, keywords: ["Python"], isCritical: false, sortOrder: 0 },
+    { id: "seeking", text: "seeking", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 10, keywords: ["Seeking"], isCritical: false, sortOrder: 1 },
+    { id: "customer", text: "customer", type: RequirementType.REQUIRED, category: RequirementCategory.EXPERIENCE, weight: 10, keywords: ["Customer"], isCritical: false, sortOrder: 2 },
+  ];
+  const breakdown = calculateEvaluationScoreBreakdown({ candidate: { ...candidate, skills: ["Python"] }, job, requirements });
+
+  assert.deepEqual(breakdown.requirementScores.map((score) => score.requirementId), ["python"]);
+  assert.equal(breakdown.overallScore, DEFAULT_RUBRIC_WEIGHTS.REQUIRED_SKILLS);
 });

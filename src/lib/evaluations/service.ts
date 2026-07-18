@@ -203,8 +203,22 @@ export async function evaluateCandidateForJob({
   });
 
   try {
-    const analysis = await analyzeCandidateForJobWithFallback(candidate, job);
     const breakdown = calculateEvaluationScoreBreakdown({ candidate, job, requirements, rubric: rubricWeights });
+    const analysis = await analyzeCandidateForJobWithFallback(candidate, job, {
+      requirements,
+      rubric: rubricWeights,
+      breakdown,
+    });
+    if (process.env.NODE_ENV !== "production") {
+      logger.info("candidate_evaluation_score_trace", {
+        operationId,
+        userId: actorUserId,
+        organizationId,
+        resourceType: "candidate",
+        resourceId: candidate.id,
+        scoreTrace: breakdown.scoreTrace,
+      });
+    }
     const evidence = collectEvidence({
       resumeText: candidate.resumeText,
       requirements,

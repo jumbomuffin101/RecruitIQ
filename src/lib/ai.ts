@@ -1,9 +1,11 @@
 import { PROMPT_VERSION } from "@/lib/evaluations/constants";
 import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
+import { calculateEvaluationScoreBreakdown, parseJobRequirementDrafts } from "@/lib/evaluations/scoring";
+import type { EvaluationScoreBreakdown, RequirementForScoring, RubricWeights } from "@/lib/evaluations/types";
+import { RequirementMatchStatus } from "@prisma/client";
 import { callOpenRouterJsonWithStatus } from "@/lib/openrouter";
 import { logger } from "@/lib/logger";
-import { getCandidateRecommendation } from "@/lib/recommendations";
-import { clamp } from "@/lib/utils";
+import { getCandidateRecommendation, getDeterministicFitBand } from "@/lib/recommendations";
 
 type CandidateLike = {
   name: string;
@@ -53,64 +55,6 @@ type AnalysisWithSource = CandidateAnalysisResult & {
   source: "openrouter" | "deterministic";
 };
 
-const stopWords = new Set([
-  "and",
-  "the",
-  "for",
-  "with",
-  "you",
-  "are",
-  "our",
-  "will",
-  "from",
-  "that",
-  "this",
-  "have",
-  "has",
-  "into",
-  "role",
-  "team",
-  "work",
-  "using",
-  "build",
-  "ability",
-  "experience",
-]);
-
-const importantSkills = [
-  "react",
-  "next.js",
-  "typescript",
-  "javascript",
-  "node",
-  "postgresql",
-  "sql",
-  "prisma",
-  "aws",
-  "python",
-  "analytics",
-  "sales",
-  "customer",
-  "operations",
-  "design",
-  "figma",
-  "marketing",
-  "leadership",
-  "communication",
-  "recruiting",
-  "sourcing",
-  "crm",
-  "api",
-];
-
-function normalize(text: string) {
-  return text.toLowerCase().replace(/[^a-z0-9.+#\s-]/g, " ");
-}
-
-function includesSkill(text: string, skill: string) {
-  return normalize(text).includes(skill.toLowerCase());
-}
-
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -131,16 +75,11 @@ function truncateText(value: string | null | undefined, maxLength: number) {
   return (value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
-function extractJobSignals(job: JobLike) {
-  const text = normalize(`${job.title} ${job.description} ${job.requirements}`);
-  const explicitSkills = importantSkills.filter((skill) => includesSkill(text, skill));
-  const tokens = text
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 3 && !stopWords.has(token));
-
-  return unique([...explicitSkills, ...tokens]).slice(0, 18);
-}
+type AnalysisInput = {
+  requirements?: RequirementForScoring[];
+  rubric?: RubricWeights;
+  breakdown?: EvaluationScoreBreakdown;
+};
 
 function buildInterviewQuestions(
   technicalQuestions: string[],
@@ -153,27 +92,29 @@ function buildInterviewQuestions(
 export function analyzeCandidateForJob(
   candidate: CandidateLike,
   job: JobLike,
+  input: AnalysisInput = {},
 ): CandidateAnalysisResult {
-  const jobSignals = extractJobSignals(job);
-  const candidateText = normalize(
-    `${candidate.skills.join(" ")} ${candidate.resumeText} ${candidate.resumeSummary ?? ""} ${candidate.experienceSummary} ${candidate.projectsSummary ?? ""}`,
-  );
-  const candidateSkills = candidate.skills.map((skill) => skill.toLowerCase());
-
-  const matchedSignals = jobSignals.filter((signal) => includesSkill(candidateText, signal));
-  const missingSignals = jobSignals.filter((signal) => !includesSkill(candidateText, signal)).slice(0, 5);
-  const directSkillMatches = importantSkills.filter(
-    (skill) => includesSkill(`${job.description} ${job.requirements}`, skill)
-      && (candidateSkills.includes(skill) || includesSkill(candidateText, skill)),
-  );
-
-  const matchRatio = jobSignals.length ? matchedSignals.length / jobSignals.length : 0.45;
-  const directSkillBonus = Math.min(directSkillMatches.length * 5, 20);
-  const resumeDepthBonus = candidate.resumeText.length > 700 ? 8 : candidate.resumeText.length > 350 ? 4 : 0;
-  const missingPenalty = Math.min(missingSignals.length * 4, 18);
-  const fitScore = Math.round(
-    clamp(42 + matchRatio * 45 + directSkillBonus + resumeDepthBonus - missingPenalty, 18, 96),
-  );
+  const requirements = input.requirements?.length
+    ? input.requirements
+    : parseJobRequirementDrafts(job.requirements).map((requirement, index) => ({ ...requirement, id: `derived-${index}` }));
+  const breakdown = input.breakdown ?? calculateEvaluationScoreBreakdown({
+    candidate,
+    job,
+    requirements,
+    rubric: input.rubric,
+  });
+  const requirementById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+  const matchedScores = breakdown.requirementScores.filter((score) => score.status !== RequirementMatchStatus.MISSING);
+  const missingScores = breakdown.requirementScores.filter((score) => score.status === RequirementMatchStatus.MISSING);
+  const primaryMatches = unique(matchedScores.flatMap((score) => score.matchedKeywords)).slice(0, 4);
+  const matchedRequirementText = unique(
+    matchedScores.map((score) => requirementById.get(score.requirementId)?.text ?? ""),
+  ).slice(0, 3);
+  const missingRequirementText = unique(
+    missingScores.map((score) => requirementById.get(score.requirementId)?.text ?? ""),
+  ).slice(0, 3);
+  const fitScore = breakdown.overallScore;
+  const fitBand = getDeterministicFitBand(fitScore);
 
   const recommendation = getCandidateRecommendation({
     fitScore,
@@ -181,25 +122,24 @@ export function analyzeCandidateForJob(
   });
   const recommendedStage = recommendation.recommendedStage;
 
-  const primaryMatches = matchedSignals.slice(0, 4);
   const strengths = [
     primaryMatches.length
-      ? `Matches key role signals: ${primaryMatches.join(", ")}.`
-      : "Shows transferable experience that may map to the role.",
-    directSkillMatches.length
-      ? `Has direct skill overlap in ${directSkillMatches.slice(0, 4).join(", ")}.`
-      : "Resume includes enough context for a structured screening conversation.",
-    candidate.experienceSummary.length > 80
-      ? "Experience summary gives clear evidence to evaluate scope and ownership."
-      : "Profile is concise and easy to review quickly.",
+      ? `Matched requirement evidence: ${primaryMatches.join(", ")}.`
+      : "No directly matched structured requirements were found in the submitted profile.",
+    matchedRequirementText.length
+      ? `Supporting qualifications include ${matchedRequirementText.join("; ")}.`
+      : "Recruiter validation is needed before relying on transferable experience.",
+    breakdown.hasMissingCritical
+      ? "A critical requirement is missing and should be validated before advancing."
+      : "The evaluation is based on the job's structured requirements and rubric.",
   ];
 
-  const gaps = missingSignals.length
-    ? missingSignals.slice(0, 3).map((signal) => `Needs validation around ${signal}.`)
+  const gaps = missingRequirementText.length
+    ? missingRequirementText.map((requirement) => `Needs validation around ${requirement}.`)
     : ["No major gaps detected from the provided resume text."];
 
-  const focusSkill = directSkillMatches[0] ?? matchedSignals[0] ?? jobSignals[0] ?? job.title;
-  const gapFocus = missingSignals[0] ?? "role-specific execution";
+  const focusSkill = primaryMatches[0] ?? matchedRequirementText[0] ?? job.title;
+  const gapFocus = missingRequirementText[0] ?? "role-specific execution";
   const technicalQuestions = [
     `Walk me through a project where you used ${focusSkill} to create a measurable outcome.`,
     `How would you approach the first technical deliverable for this ${job.title} role?`,
@@ -216,10 +156,10 @@ export function analyzeCandidateForJob(
 
   return {
     fitScore,
-    summary: `${candidate.name} appears to be a ${fitScore >= 85 ? "strong" : fitScore >= 70 ? "moderate" : fitScore >= 50 ? "review-needed" : "low"} fit for ${job.title}. The score is based on matched requirements, direct skill overlap, resume depth, and unresolved requirement gaps.`,
+    summary: `${candidate.name} shows ${fitBand.summaryPhrase} for ${job.title}. The ${fitScore}/100 score is derived from matched structured requirements, weighted category contributions, and unresolved gaps.`,
     roleMatch: primaryMatches.length
-      ? `${candidate.name} matches ${primaryMatches.join(", ")} against the ${job.title} requirements.`
-      : `${candidate.name} may have transferable experience, but direct requirement overlap needs validation.`,
+      ? `${candidate.name} directly matches ${primaryMatches.join(", ")} in the ${job.title} requirements.`
+      : `${candidate.name} has no verified direct match against the structured requirements yet.`,
     strengths,
     gaps,
     recommendedStage,
@@ -319,6 +259,11 @@ async function analyzeWithOpenRouter(
   });
 
   if (!result.ok) {
+    logger.warn("candidate_analysis_openrouter_fallback", {
+      resourceType: "candidate_analysis",
+      status: result.status,
+      reason: result.reason,
+    });
     return null;
   }
 
@@ -334,8 +279,9 @@ async function analyzeWithOpenRouter(
 export async function analyzeCandidateForJobWithFallback(
   candidate: CandidateLike,
   job: JobLike,
+  input: AnalysisInput = {},
 ): Promise<AnalysisWithSource> {
-  const deterministic = analyzeCandidateForJob(candidate, job);
+  const deterministic = analyzeCandidateForJob(candidate, job, input);
   const aiAnalysis = await analyzeWithOpenRouter(candidate, job, deterministic);
 
   if (aiAnalysis) {

@@ -1,4 +1,4 @@
-export const SCORING_VERSION = "evaluation-v1";
+export const SCORING_VERSION = "evaluation-v2";
 export const PROMPT_VERSION = "candidate-analysis-v2";
 
 export const RECOMMENDATION_THRESHOLDS = {

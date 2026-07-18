@@ -53,11 +53,13 @@ export type OpenRouterJsonResult<T> =
 
 function getOpenRouterConfig() {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  const configuredBaseUrl = process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_BASE_URL;
 
   return {
     apiKey,
     model: process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL,
-    baseUrl: (process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/$/, ""),
+    // Accept either the API root or an accidentally configured completion endpoint.
+    baseUrl: configuredBaseUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, ""),
     appName: process.env.OPENROUTER_APP_NAME?.trim() || "",
     siteUrl: process.env.OPENROUTER_SITE_URL?.trim() || "",
   };
@@ -201,7 +203,7 @@ async function executeOpenRouterJson<T>({
 
     if (!response.ok) {
       const classification = classifyOpenRouterStatus(response.status);
-      logger.warn("openrouter_request_failed", { resourceType: context, status: response.status, reason: "provider_response" });
+      logger.warn("openrouter_request_failed", { resourceType: context, status: response.status, reason: `provider_${response.status}` });
       return {
         ok: false,
         reason: classification.reason,

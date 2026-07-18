@@ -246,7 +246,9 @@ export async function getCompareData(jobId?: string) {
             recommendedStage: savedAnalysis.recommendedStage,
             interviewQuestions: [],
           }
-        : analyzeCandidateForJob(candidate, selectedJob);
+        : analyzeCandidateForJob(candidate, selectedJob, {
+            requirements: selectedJob.jobRequirements,
+          });
       const fitScore = structuredEvaluation?.overallScore ?? application.fitScore ?? analysis.fitScore;
       const recommendation = getCandidateRecommendation({
         fitScore,

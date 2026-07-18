@@ -11,6 +11,24 @@ export type CandidateRecommendation = {
   tone: RecommendationTone;
 };
 
+export type DeterministicFitBand = {
+  label: "Strong fit" | "Good fit" | "Partial fit" | "Limited alignment";
+  summaryPhrase: string;
+};
+
+export function getDeterministicFitBand(fitScore: number): DeterministicFitBand {
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.interview) {
+    return { label: "Strong fit", summaryPhrase: "a strong fit" };
+  }
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.screened) {
+    return { label: "Good fit", summaryPhrase: "a good fit" };
+  }
+  if (fitScore >= RECOMMENDATION_THRESHOLDS.applied) {
+    return { label: "Partial fit", summaryPhrase: "a partial fit that warrants recruiter review" };
+  }
+  return { label: "Limited alignment", summaryPhrase: "limited alignment" };
+}
+
 export function getDeterministicRecommendedStage(fitScore: number): CandidateStage {
   if (fitScore >= RECOMMENDATION_THRESHOLDS.interview) return "INTERVIEW";
   if (fitScore >= RECOMMENDATION_THRESHOLDS.screened) return "SCREENED";

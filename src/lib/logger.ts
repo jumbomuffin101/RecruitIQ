@@ -11,6 +11,7 @@ type LogFields = {
   mappedRole?: string;
   errorClass?: string;
   prismaCode?: string;
+  scoreTrace?: unknown;
 };
 
 function emit(level: "info" | "warn" | "error", event: string, fields: LogFields = {}) {
