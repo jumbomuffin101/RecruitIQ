@@ -9,6 +9,8 @@ type LogFields = {
   clerkUserId?: string;
   clerkOrganizationId?: string;
   mappedRole?: string;
+  errorClass?: string;
+  prismaCode?: string;
 };
 
 function emit(level: "info" | "warn" | "error", event: string, fields: LogFields = {}) {

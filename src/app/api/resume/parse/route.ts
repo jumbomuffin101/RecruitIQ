@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { extractText } from "unpdf";
 import { requireRole, hiringManagerRoles } from "@/lib/auth-context";
+import { createOperationId, logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -8,8 +9,11 @@ export const maxDuration = 30;
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  const operationId = createOperationId();
+  let actor: { userId: string; organizationId: string } | undefined;
   try {
-    await requireRole(...hiringManagerRoles);
+    const context = await requireRole(...hiringManagerRoles);
+    actor = context;
     const formData = await request.formData();
     const file = formData.get("resume");
 
@@ -46,6 +50,13 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
+    logger.warn("resume_parse_failed", {
+      operationId,
+      userId: actor?.userId,
+      organizationId: actor?.organizationId,
+      resourceType: "resume",
+      reason: error instanceof Error ? error.name : "unknown",
+    });
     if (error instanceof Error && (error.message.includes("Sign in") || error.message.includes("permission"))) {
       return NextResponse.json({ error: "Authentication is required to parse resumes." }, { status: 401 });
     }

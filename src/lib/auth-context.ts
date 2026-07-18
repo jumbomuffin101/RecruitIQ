@@ -1,6 +1,6 @@
 import "server-only";
 
-import { UserRole } from "@prisma/client";
+import { Prisma, type Organization, UserRole } from "@prisma/client";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { mapClerkOrganizationRole } from "@/lib/clerk-roles";
 import { assertClerkEnvironment } from "@/lib/env";
@@ -61,6 +61,10 @@ function safeErrorReason(error: unknown) {
     return `${error instanceof Error ? error.name : "Error"}:${error.code}`;
   }
   return error instanceof Error ? error.name : "unknown";
+}
+
+function getPrismaCode(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined;
 }
 
 async function syncPrismaUser({
@@ -129,7 +133,11 @@ async function syncPrismaUser({
       },
     });
   } catch (error) {
-    logger.error("prisma_user_sync_failed", { reason: safeErrorReason(error) });
+    logger.error("prisma_user_sync_failed", {
+      reason: safeErrorReason(error),
+      errorClass: error instanceof Error ? error.name : "unknown",
+      prismaCode: getPrismaCode(error),
+    });
     throw error;
   }
 }
@@ -139,15 +147,33 @@ async function syncPrismaOrganization(clerkOrganizationId: string) {
   const clerk = await clerkClient();
   const clerkOrganization = await clerk.organizations.getOrganization({ organizationId: clerkOrganizationId });
 
-  const organization = await prisma.organization.upsert({
-    where: { clerkOrganizationId },
-    update: { name: clerkOrganization.name },
-    create: {
-      clerkOrganizationId,
-      name: clerkOrganization.name,
-      slug: createOrganizationSlug(clerkOrganization.name, clerkOrganizationId),
-    },
-  });
+  let organization: Organization;
+  try {
+    organization = await prisma.organization.upsert({
+      where: { clerkOrganizationId },
+      update: { name: clerkOrganization.name },
+      create: {
+        clerkOrganizationId,
+        name: clerkOrganization.name,
+        slug: createOrganizationSlug(clerkOrganization.name, clerkOrganizationId),
+      },
+    });
+  } catch (error) {
+    // Concurrent first requests for a newly active Clerk organization can race on its unique mirror.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const concurrentOrganization = await prisma.organization.findUnique({ where: { clerkOrganizationId } });
+      if (!concurrentOrganization) throw error;
+      organization = concurrentOrganization;
+    } else {
+      logger.error("prisma_organization_sync_failed", {
+        clerkOrganizationId,
+        reason: safeErrorReason(error),
+        errorClass: error instanceof Error ? error.name : "unknown",
+        prismaCode: getPrismaCode(error),
+      });
+      throw error;
+    }
+  }
 
   logger.info("prisma_organization_synced", {
     organizationId: organization.id,

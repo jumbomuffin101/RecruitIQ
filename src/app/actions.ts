@@ -24,7 +24,7 @@ import { getPrisma } from "@/lib/prisma";
 import { extractResumeWithFallback } from "@/lib/resume-extract";
 import { createApplicationSchema, parseApplicationActionInput } from "@/lib/applications/schemas";
 import { getCurrentUserContext, hiringManagerRoles, requireRole } from "@/lib/auth-context";
-import { logger } from "@/lib/logger";
+import { createOperationId, logger } from "@/lib/logger";
 import {
   createInterviewScorecard,
   getInterviewSignalForRating,
@@ -71,15 +71,17 @@ function isPrismaKnownError(error: unknown): error is Prisma.PrismaClientKnownRe
 }
 
 function safeEvaluationActionError(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message.slice(0, 220);
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (/^(Candidate|Job|Application|Interview|Select|Add|Generate|Completed scorecards|This candidate|RecruitIQ)/.test(message)) {
+    return message.slice(0, 220);
   }
 
-  return "Candidate evaluation could not be completed. Please try again.";
+  return "The requested action could not be completed. Please try again.";
 }
 
 export async function parseResumeAction(formData: FormData) {
-  await requireRole(...hiringManagerRoles);
+  const operationId = createOperationId();
+  const context = await requireRole(...hiringManagerRoles);
   const resumeText = requiredString(formData, "resumeText");
   if (resumeText.length > 100_000) {
     return { success: false as const, error: "Resume text is too long. Please keep it under 100,000 characters." };
@@ -87,7 +89,14 @@ export async function parseResumeAction(formData: FormData) {
   try {
     const data = await extractResumeWithFallback(resumeText);
     return { success: true as const, data };
-  } catch {
+  } catch (error) {
+    logger.error("resume_extraction_failed", {
+      operationId,
+      userId: context.userId,
+      organizationId: context.organizationId,
+      resourceType: "resume",
+      reason: error instanceof Error ? error.name : "unknown",
+    });
     return { success: false as const, error: "We could not extract candidate details. You can continue with manual entry." };
   }
 }
@@ -534,12 +543,15 @@ export async function generateInterviewScorecard(
   _previousState: InterviewScorecardActionState,
   formData: FormData,
 ): Promise<InterviewScorecardActionState> {
+  const operationId = createOperationId();
+  let audit: { userId: string; organizationId: string; candidateId?: string; jobId?: string } | undefined;
   try {
     const prisma = getPrisma();
     const context = await requireRole(...hiringManagerRoles);
     const org = await getWorkspaceOrganization();
     const candidateId = requiredString(formData, "candidateId");
     const jobId = requiredString(formData, "jobId");
+    audit = { userId: context.userId, organizationId: org.id, candidateId, jobId };
     const candidate = await prisma.candidate.findFirst({
       where: { id: candidateId, organizationId: org.id },
       include: {
@@ -566,6 +578,14 @@ export async function generateInterviewScorecard(
     revalidatePath(`/candidates/${candidateId}`);
     return { status: "success", message: "Interview scorecard generated from the latest evaluation.", scorecardId: scorecard.id };
   } catch (error) {
+    logger.error("interview_scorecard_generation_failed", {
+      operationId,
+      userId: audit?.userId,
+      organizationId: audit?.organizationId,
+      resourceType: "interview_scorecard",
+      resourceId: audit?.candidateId,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
     return { status: "error", message: safeEvaluationActionError(error) };
   }
 }
@@ -574,11 +594,14 @@ export async function saveInterviewScorecard(
   _previousState: InterviewScorecardActionState,
   formData: FormData,
 ): Promise<InterviewScorecardActionState> {
+  const operationId = createOperationId();
+  let audit: { userId: string; organizationId: string; scorecardId?: string } | undefined;
   try {
     const prisma = getPrisma();
     const context = await getCurrentUserContext();
     const org = await getWorkspaceOrganization();
     const scorecardId = requiredString(formData, "scorecardId");
+    audit = { userId: context.userId, organizationId: org.id, scorecardId };
     const intent = String(formData.get("intent") ?? "save");
     const scorecard = await prisma.interviewScorecard.findFirst({
       where: { id: scorecardId, candidate: { organizationId: org.id } },
@@ -647,6 +670,14 @@ export async function saveInterviewScorecard(
       scorecardId,
     };
   } catch (error) {
+    logger.error("interview_scorecard_save_failed", {
+      operationId,
+      userId: audit?.userId,
+      organizationId: audit?.organizationId,
+      resourceType: "interview_scorecard",
+      resourceId: audit?.scorecardId,
+      reason: error instanceof Error ? error.name : "unknown",
+    });
     return { status: "error", message: safeEvaluationActionError(error) };
   }
 }

@@ -42,8 +42,5 @@
     "tailwindcss": "latest",
     "tsx": "latest",
     "typescript": "latest"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   }
 }
