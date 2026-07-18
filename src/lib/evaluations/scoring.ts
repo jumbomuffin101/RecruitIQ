@@ -1,10 +1,11 @@
 import {
+  AiRequirementAssessment,
   EvaluationScoreCategory,
   RequirementCategory,
   RequirementMatchStatus,
   RequirementType,
 } from "@prisma/client";
-import { DEFAULT_REQUIREMENT_WEIGHTS, DEFAULT_RUBRIC_WEIGHTS } from "@/lib/evaluations/constants";
+import { AI_STRONG_MATCH_MIN_CONFIDENCE, DEFAULT_REQUIREMENT_WEIGHTS, DEFAULT_RUBRIC_WEIGHTS, REQUIREMENT_MATCH_CREDIT } from "@/lib/evaluations/constants";
 import type {
   CandidateForEvaluation,
   EvaluationScoreBreakdown,
@@ -13,6 +14,7 @@ import type {
   RequirementForScoring,
   RequirementScore,
   RubricWeights,
+  SemanticRequirementAssessment,
   ScoreTraceCategory,
 } from "@/lib/evaluations/types";
 import { clamp } from "@/lib/utils";
@@ -200,17 +202,49 @@ function getMatchedKeywords(keywords: string[], candidateText: string) {
   });
 }
 
-function scoreOneRequirement(requirement: RequirementForScoring, candidateText: string, maxScore: number): RequirementScore {
+function assessmentRank(assessment: AiRequirementAssessment) {
+  return [AiRequirementAssessment.NO_EVIDENCE, AiRequirementAssessment.WEAK_EVIDENCE, AiRequirementAssessment.PARTIAL_MATCH, AiRequirementAssessment.STRONG_MATCH].indexOf(assessment);
+}
+
+function deterministicAssessment(status: RequirementMatchStatus, ratio: number) {
+  if (status === RequirementMatchStatus.MATCHED) return AiRequirementAssessment.STRONG_MATCH;
+  if (status === RequirementMatchStatus.PARTIAL) {
+    return ratio >= 0.5 ? AiRequirementAssessment.PARTIAL_MATCH : AiRequirementAssessment.WEAK_EVIDENCE;
+  }
+  return AiRequirementAssessment.NO_EVIDENCE;
+}
+
+function statusForAssessment(assessment: AiRequirementAssessment) {
+  return assessment === AiRequirementAssessment.STRONG_MATCH
+    ? RequirementMatchStatus.MATCHED
+    : assessment === AiRequirementAssessment.NO_EVIDENCE
+      ? RequirementMatchStatus.MISSING
+      : RequirementMatchStatus.PARTIAL;
+}
+
+function scoreOneRequirement(
+  requirement: RequirementForScoring,
+  candidateText: string,
+  maxScore: number,
+  aiAssessment?: SemanticRequirementAssessment,
+): RequirementScore {
   const keywords = extractRequirementKeywords(requirement.text, requirement.keywords);
   const matchedKeywords = getMatchedKeywords(keywords, candidateText);
   const ratio = keywords.length ? matchedKeywords.length / keywords.length : 0;
-  const partialCreditMultiplier = requirement.type === RequirementType.REQUIRED ? 0.5 : 0.7;
-  const status = ratio >= 0.7
+  const deterministicStatus = ratio >= 0.7
     ? RequirementMatchStatus.MATCHED
     : ratio > 0 ? RequirementMatchStatus.PARTIAL : RequirementMatchStatus.MISSING;
-  const score = status === RequirementMatchStatus.MATCHED
-    ? maxScore
-    : status === RequirementMatchStatus.PARTIAL ? Math.round(maxScore * ratio * partialCreditMultiplier) : 0;
+  const deterministic = deterministicAssessment(deterministicStatus, ratio);
+  const groundedAiAssessment = aiAssessment?.evidence.length
+    ? aiAssessment.assessment === AiRequirementAssessment.STRONG_MATCH && aiAssessment.confidence < AI_STRONG_MATCH_MIN_CONFIDENCE
+      ? AiRequirementAssessment.PARTIAL_MATCH
+      : aiAssessment.assessment
+    : undefined;
+  const assessment = groundedAiAssessment && assessmentRank(groundedAiAssessment) > assessmentRank(deterministic)
+    ? groundedAiAssessment
+    : deterministic;
+  const status = statusForAssessment(assessment);
+  const score = Math.round(maxScore * REQUIREMENT_MATCH_CREDIT[assessment]);
 
   return {
     requirementId: requirement.id,
@@ -219,8 +253,10 @@ function scoreOneRequirement(requirement: RequirementForScoring, candidateText: 
     maxScore,
     confidence: requirement.isCritical && status === RequirementMatchStatus.MISSING
       ? 0.2
-      : status === RequirementMatchStatus.MATCHED ? 0.86 : status === RequirementMatchStatus.PARTIAL ? 0.58 : 0.34,
-    explanation: status === RequirementMatchStatus.MATCHED
+      : aiAssessment?.confidence ?? (status === RequirementMatchStatus.MATCHED ? 0.86 : status === RequirementMatchStatus.PARTIAL ? 0.58 : 0.34),
+    explanation: aiAssessment && assessment !== deterministic
+      ? `${aiAssessment.explanation} Grounded semantic evidence upgraded the deterministic assessment.`
+      : status === RequirementMatchStatus.MATCHED
       ? `Matched ${matchedKeywords.slice(0, 4).join(", ")}.`
       : status === RequirementMatchStatus.PARTIAL
         ? `Partially matched ${matchedKeywords.slice(0, 4).join(", ")}; needs validation.`
@@ -228,6 +264,12 @@ function scoreOneRequirement(requirement: RequirementForScoring, candidateText: 
           ? "No supporting evidence found in the submitted resume for this required qualification."
           : "No supporting evidence found in the submitted resume for this preferred qualification.",
     matchedKeywords,
+    assessment,
+    deterministicStatus,
+    aiAssessment: aiAssessment?.assessment,
+    aiConfidence: aiAssessment?.confidence,
+    aiExplanation: aiAssessment?.explanation,
+    aiEvidence: aiAssessment?.evidence ?? [],
   };
 }
 
@@ -311,6 +353,10 @@ function buildScoreTrace(requirements: RequirementForScoring[], requirementScore
       id: requirement.id,
       text: requirement.text,
       matchStatus: score?.status ?? RequirementMatchStatus.MISSING,
+      deterministicStatus: score?.deterministicStatus ?? RequirementMatchStatus.MISSING,
+      assessment: score?.assessment ?? AiRequirementAssessment.NO_EVIDENCE,
+      aiAssessment: score?.aiAssessment,
+      aiConfidence: score?.aiConfidence,
       contribution: score?.score ?? 0,
       maxPoints: score?.maxScore ?? 0,
       evidence: score?.matchedKeywords ?? [],
@@ -325,11 +371,13 @@ export function calculateEvaluationScoreBreakdown({
   job,
   requirements,
   rubric = DEFAULT_RUBRIC_WEIGHTS,
+  semanticAssessments = [],
 }: {
   candidate: CandidateForEvaluation;
   job: JobForEvaluation;
   requirements: RequirementForScoring[];
   rubric?: RubricWeights;
+  semanticAssessments?: SemanticRequirementAssessment[];
 }): EvaluationScoreBreakdown {
   const validStructuredRequirements = requirements.filter((requirement) =>
     extractRequirementKeywords(requirement.text, requirement.keywords).length > 0 || isMeaningfulPhrase(requirement.text),
@@ -338,9 +386,10 @@ export function calculateEvaluationScoreBreakdown({
     ? validStructuredRequirements
     : parseJobRequirementDrafts(job.requirements).map((draft, index) => ({ ...draft, id: `derived-${index}` }));
   const candidateText = candidateSearchText(candidate);
+  const semanticByRequirement = new Map(semanticAssessments.map((assessment) => [assessment.requirementId, assessment]));
   const maxScores = normalizeRequirementMaxScores(effectiveRequirements, rubric);
   const requirementScores = effectiveRequirements.map((requirement) =>
-    scoreOneRequirement(requirement, candidateText, maxScores.get(requirement.id) ?? requirement.weight),
+    scoreOneRequirement(requirement, candidateText, maxScores.get(requirement.id) ?? requirement.weight, semanticByRequirement.get(requirement.id)),
   );
   const categoryScores = calculateCategoryScores(effectiveRequirements, requirementScores, rubric);
   const hasMissingCritical = requirementScores.some((score) => {

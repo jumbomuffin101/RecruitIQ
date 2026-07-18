@@ -86,6 +86,13 @@ enum RequirementMatchStatus {
   MISSING
 }
 
+enum AiRequirementAssessment {
+  NO_EVIDENCE
+  WEAK_EVIDENCE
+  PARTIAL_MATCH
+  STRONG_MATCH
+}
+
 enum InterviewScorecardStatus {
   DRAFT
   IN_PROGRESS
@@ -327,10 +334,14 @@ model EvaluationCategoryScore {
 }
 
 model RequirementResult {
-  id                    String                 @id @default(cuid())
+  id                    String                   @id @default(cuid())
   evaluationId          String
   requirementId         String
   status                RequirementMatchStatus
+  deterministicStatus   RequirementMatchStatus?
+  aiAssessment          AiRequirementAssessment?
+  aiConfidence          Float?
+  aiExplanation         String?
   score                 Int
   maxScore              Int
   confidence            Float?
@@ -339,8 +350,8 @@ model RequirementResult {
   requirementType       RequirementType?
   requirementCategory   RequirementCategory?
   requirementWeight     Int?
-  requirementIsCritical Boolean                @default(false)
-  createdAt             DateTime               @default(now())
+  requirementIsCritical Boolean                  @default(false)
+  createdAt             DateTime                 @default(now())
 
   evaluation        CandidateEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   requirement       JobRequirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)

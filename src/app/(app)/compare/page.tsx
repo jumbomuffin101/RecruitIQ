@@ -102,6 +102,7 @@ export default async function ComparePage({
                           {candidate.name}
                         </Link>
                         <StatusBadge status={candidate.status} />
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{candidate.evaluationMode}</span>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Scorecard: {candidate.scorecardStatus ? candidate.scorecardStatus.replace("_", " ") : "Not started"}</span>
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{candidate.roleAppliedFor}</p>
@@ -186,7 +187,7 @@ export default async function ComparePage({
                           return (
                             <td key={candidate.id} className="px-3 py-3">
                               <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${result?.status === "MATCHED" ? "bg-emerald-50 text-emerald-700" : result?.status === "PARTIAL" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
-                                {result?.status ? result.status.toLowerCase() : "preview"}
+                                {result?.aiAssessment ? result.aiAssessment.replace("_", " ").toLowerCase() : result?.status ? result.status.toLowerCase() : "preview"}
                               </span>
                             </td>
                           );

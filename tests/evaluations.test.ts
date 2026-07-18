@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ApplicationStatus, EvaluationScoreCategory, RequirementCategory, RequirementMatchStatus, RequirementType, UserRole } from "@prisma/client";
+import { AiRequirementAssessment, ApplicationStatus, EvaluationScoreCategory, RequirementCategory, RequirementMatchStatus, RequirementType, UserRole } from "@prisma/client";
 import { analyzeCandidateForJob } from "@/lib/ai";
 import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
 import {
@@ -18,6 +18,7 @@ import { clamp } from "@/lib/utils";
 import { classifyOpenRouterFailure, classifyOpenRouterStatus, parseOpenRouterJson, resolveOpenRouterEndpoint } from "@/lib/openrouter";
 import { getCandidateRecommendation, getDeterministicRecommendedStage } from "@/lib/recommendations";
 import { getInterviewValidationOutcome, getValidationSummary } from "@/lib/interviews/validation";
+import { validateSemanticRequirementResponse } from "@/lib/evaluations/semantic";
 import { countApplicationsByStage, getApplicationConversions } from "@/lib/applications/metrics";
 import { canDeleteHiringData, canManageHiring, canSubmitInterviewFeedback } from "@/lib/permissions";
 
@@ -394,4 +395,52 @@ test("legacy prose fragments do not consume structured scoring weight", () => {
 
   assert.deepEqual(breakdown.requirementScores.map((score) => score.requirementId), ["python"]);
   assert.equal(breakdown.overallScore, DEFAULT_RUBRIC_WEIGHTS.REQUIRED_SKILLS);
+});
+
+test("hybrid scoring upgrades a grounded semantic match while keeping points deterministic", () => {
+  const requirements = [{ id: "rest", text: "REST API development", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 10, keywords: ["REST APIs"], isCritical: false, sortOrder: 0 }];
+  const semantic = validateSemanticRequirementResponse({
+    requirements,
+    resumeText: "EXPERIENCE Built backend services for customer-facing product workflows.",
+    value: { assessments: [{ requirementId: "rest", assessment: "STRONG_MATCH", confidence: 0.9, explanation: "The backend-services experience is directly relevant to API development.", evidence: [{ excerpt: "Built backend services for customer-facing product workflows.", resumeSection: "Experience" }] }] },
+  });
+  assert.equal(semantic.success, true);
+  const hybrid = calculateEvaluationScoreBreakdown({
+    candidate: { ...candidate, skills: [], resumeText: "EXPERIENCE Built backend services for customer-facing product workflows." },
+    job,
+    requirements,
+    semanticAssessments: semantic.success ? semantic.assessments : [],
+  });
+  const result = hybrid.requirementScores[0];
+  assert.equal(result.deterministicStatus, RequirementMatchStatus.MISSING);
+  assert.equal(result.assessment, AiRequirementAssessment.STRONG_MATCH);
+  assert.equal(result.status, RequirementMatchStatus.MATCHED);
+  assert.equal(result.score, DEFAULT_RUBRIC_WEIGHTS.REQUIRED_SKILLS);
+});
+
+test("semantic validation rejects unknown, duplicate, and invalid-confidence requirement results", () => {
+  const requirements = [{ id: "python", text: "Python", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 10, keywords: ["Python"], isCritical: false, sortOrder: 0 }];
+  const base = { assessment: "STRONG_MATCH", confidence: 0.9, explanation: "The resume provides direct Python evidence.", evidence: [{ excerpt: "Python automation", resumeSection: "Experience" }] };
+  const unknown = validateSemanticRequirementResponse({ requirements, resumeText: "Python automation", value: { assessments: [{ ...base, requirementId: "unknown" }] } });
+  const duplicate = validateSemanticRequirementResponse({ requirements, resumeText: "Python automation", value: { assessments: [{ ...base, requirementId: "python" }, { ...base, requirementId: "python" }] } });
+  const invalidConfidence = validateSemanticRequirementResponse({ requirements, resumeText: "Python automation", value: { assessments: [{ ...base, requirementId: "python", confidence: 1.2 }] } });
+  assert.deepEqual(unknown, { success: false, reason: "unknown_requirement_id" });
+  assert.deepEqual(duplicate, { success: false, reason: "duplicate_requirement_id" });
+  assert.deepEqual(invalidConfidence, { success: false, reason: "schema_validation" });
+});
+
+test("fabricated evidence is discarded and low-confidence strong matches are capped", () => {
+  const requirements = [{ id: "rest", text: "REST API development", type: RequirementType.REQUIRED, category: RequirementCategory.SKILL, weight: 10, keywords: ["REST APIs"], isCritical: false, sortOrder: 0 }];
+  const candidateWithoutApi = { ...candidate, skills: [], resumeText: "Built backend services for product workflows." };
+  const fabricated = validateSemanticRequirementResponse({ requirements, resumeText: candidateWithoutApi.resumeText, value: { assessments: [{ requirementId: "rest", assessment: "STRONG_MATCH", confidence: 0.95, explanation: "Claimed support.", evidence: [{ excerpt: "Architected and shipped RESTful APIs", resumeSection: "Experience" }] }] } });
+  assert.equal(fabricated.success, true);
+  const fabricatedScore = calculateEvaluationScoreBreakdown({ candidate: candidateWithoutApi, job, requirements, semanticAssessments: fabricated.success ? fabricated.assessments : [] });
+  assert.equal(fabricatedScore.requirementScores[0].assessment, AiRequirementAssessment.NO_EVIDENCE);
+  assert.equal(fabricatedScore.overallScore, 0);
+
+  const lowConfidence = validateSemanticRequirementResponse({ requirements, resumeText: candidateWithoutApi.resumeText, value: { assessments: [{ requirementId: "rest", assessment: "STRONG_MATCH", confidence: 0.3, explanation: "Backend services are related to API development.", evidence: [{ excerpt: "Built backend services for product workflows.", resumeSection: "Experience" }] }] } });
+  assert.equal(lowConfidence.success, true);
+  const cappedScore = calculateEvaluationScoreBreakdown({ candidate: candidateWithoutApi, job, requirements, semanticAssessments: lowConfidence.success ? lowConfidence.assessments : [] });
+  assert.equal(cappedScore.requirementScores[0].assessment, AiRequirementAssessment.PARTIAL_MATCH);
+  assert.equal(cappedScore.overallScore, Math.round(DEFAULT_RUBRIC_WEIGHTS.REQUIRED_SKILLS * 0.6));
 });

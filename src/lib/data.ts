@@ -272,6 +272,7 @@ export async function getCompareData(jobId?: string) {
         recommendationDescription: recommendation.description,
         recommendationTone: recommendation.tone,
         scoreSource: structuredEvaluation ? "Persisted evaluation" : "Deterministic preview",
+        evaluationMode: structuredEvaluation?.source === "HYBRID" ? "AI-assisted hybrid" : "Deterministic",
         categoryScores: structuredEvaluation?.categories ?? [],
         requirementResults: structuredEvaluation?.requirementResults ?? [],
         scorecardStatus: candidate.interviewScorecards[0]?.status ?? null,

@@ -1,4 +1,5 @@
 import type {
+  AiRequirementAssessment,
   EvaluationScoreCategory,
   RequirementCategory,
   RequirementMatchStatus,
@@ -46,6 +47,27 @@ export type RequirementScore = {
   confidence: number;
   explanation: string;
   matchedKeywords: string[];
+  assessment: AiRequirementAssessment;
+  deterministicStatus: RequirementMatchStatus;
+  aiAssessment?: AiRequirementAssessment;
+  aiConfidence?: number;
+  aiExplanation?: string;
+  aiEvidence: GroundedAiEvidence[];
+};
+
+export type GroundedAiEvidence = {
+  excerpt: string;
+  resumeSection?: string;
+  startOffset: number;
+  endOffset: number;
+};
+
+export type SemanticRequirementAssessment = {
+  requirementId: string;
+  assessment: AiRequirementAssessment;
+  confidence: number;
+  explanation: string;
+  evidence: GroundedAiEvidence[];
 };
 
 export type CategoryScore = {
@@ -73,6 +95,10 @@ export type ScoreTraceCategory = {
     id: string;
     text: string;
     matchStatus: RequirementMatchStatus;
+    deterministicStatus: RequirementMatchStatus;
+    assessment: AiRequirementAssessment;
+    aiAssessment?: AiRequirementAssessment;
+    aiConfidence?: number;
     contribution: number;
     maxPoints: number;
     evidence: string[];

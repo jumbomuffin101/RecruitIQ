@@ -52,8 +52,11 @@ flowchart LR
 flowchart LR
   Resume[PDF, TXT, or pasted resume] --> Parse[Server-side parsing]
   Parse --> Candidate[Structured candidate profile]
-  Candidate --> Score[Deterministic rubric scoring]
-  Score --> Evidence[Resume evidence extraction]
+  Candidate --> Baseline[Deterministic requirement baseline]
+  Baseline --> Semantic[Optional OpenRouter semantic assessment]
+  Semantic --> Ground[Schema and resume-evidence validation]
+  Ground --> Score[Deterministic rubric calculation]
+  Score --> Evidence[Requirement evidence and audit trace]
   Candidate --> Narrative[Optional OpenRouter narrative]
   Narrative --> Validate[Zod validation]
   Evidence --> Evaluation[Versioned CandidateEvaluation]
@@ -71,15 +74,26 @@ RecruitIQ uses a PostgreSQL-first relational model. Clerk provides session and o
 
 ## Explainable Evaluation Design
 
-The final score is deterministic and derived from a job's structured requirements and category rubric. Every completed evaluation persists the following:
+The final score is deterministic and derived from a job's structured requirements and category rubric. RecruitIQ's hybrid evaluation engine follows six steps:
+
+1. Deterministic requirement matching establishes a keyword and evidence baseline.
+2. OpenRouter optionally evaluates qualitative semantic evidence for each requirement.
+3. Schema, identifier, confidence, and resume-grounding validation filters AI output.
+4. Centralized deterministic credit mapping converts approved qualitative assessments to points.
+5. Deterministic category weighting produces the final 0-100 score.
+6. AI narrative generation receives that final score and its evidence-backed breakdown.
+
+Each AI assessment must use an exact requirement ID and grounded resume excerpt; malformed, fabricated, duplicate, or unknown results are discarded. The LLM does not directly choose the final score.
+
+Every completed evaluation persists the following:
 
 - Category scores and normalized rubric weights.
-- Requirement outcomes: matched, partial, or missing.
-- Resume excerpts supporting matched or partial requirements.
+- Deterministic requirement status alongside an optional AI semantic assessment and confidence.
+- Resume excerpts supporting matched or partial requirements, including validated AI-provided excerpts when available.
 - Rubric, scoring, and prompt snapshots for historical explainability.
 - Recommendation, confidence, and provider metadata.
 
-OpenRouter can improve the recruiter-facing narrative, but it does not determine the numerical fit score or make a hiring decision. Regenerating an evaluation creates a new historical record rather than overwriting prior results.
+`HYBRID` evaluations use validated, grounded AI semantic evidence plus the deterministic rubric. Any provider, schema, ID-integrity, or grounding failure produces a `DETERMINISTIC` evaluation instead. OpenRouter can also improve recruiter-facing narrative, but it does not determine the numerical fit score or make a hiring decision. Regenerating an evaluation creates a new historical record rather than overwriting prior results.
 
 ## Why This Is Technically Interesting
 
@@ -111,7 +125,7 @@ OpenRouter can improve the recruiter-facing narrative, but it does not determine
 
 ## AI Reliability
 
-OpenRouter is optional. When configured, its output is requested server-side as strict JSON and validated with Zod before narrative fields are persisted. When a provider key is absent, the request times out, the response is invalid, or the provider fails, RecruitIQ continues with deterministic extraction and analysis. API keys and raw resume contents are never logged or sent to the browser.
+OpenRouter is optional. When configured, its output is requested server-side as strict JSON and validated with Zod before narrative fields are persisted. For hybrid scoring, it can only provide qualitative requirement evidence; exact requirement IDs, enum values, confidence bounds, and resume-grounded excerpts are validated before use. When a provider key is absent, the request times out, the response is invalid, an ID is unknown or duplicated, or evidence cannot be grounded, RecruitIQ continues with deterministic extraction and analysis. API keys and raw resume contents are never logged or sent to the browser.
 
 RecruitIQ resolves `OPENROUTER_BASE_URL` to one canonical Chat Completions endpoint. Use `https://openrouter.ai/api/v1` in Vercel; `https://openrouter.ai/api/v1/chat/completions` is also accepted explicitly. Workspace administrators can call `/api/ai-status?probe=1` to run a minimal server-side connectivity check. The response includes the configured model, endpoint, status, and sanitized provider error information only.
 

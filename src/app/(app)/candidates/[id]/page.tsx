@@ -100,7 +100,9 @@ export default async function CandidateDetailPage({
     const resumeSpecificQuestions = analysis?.resumeSpecificQuestions?.length
       ? analysis.resumeSpecificQuestions
       : kit ? [kit.questions[1], ...kit.questions.slice(4)].filter(Boolean) : [];
-    const analysisSourceLabel = analysis?.source === "openrouter" ? "AI-enhanced via OpenRouter" : "Deterministic fallback";
+    const analysisSourceLabel = latestEvaluation?.source === "HYBRID"
+      ? "AI-assisted hybrid evaluation"
+      : "Deterministic evaluation";
     const recommendation = analysis
       ? getCandidateRecommendation({
           fitScore: analysis.fitScore,
@@ -254,7 +256,7 @@ export default async function CandidateDetailPage({
                     <BrainCircuit className="h-5 w-5 text-blue-700" />
                     Recruiter Copilot
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">Uses OpenRouter when configured, with deterministic scoring as a reliable fallback.</p>
+                  <p className="mt-1 text-sm text-slate-500">AI evaluates semantic evidence for each requirement. The final score is calculated using the job&apos;s deterministic scoring rubric.</p>
                 </div>
               </div>
               {analysis ? (
@@ -351,7 +353,7 @@ export default async function CandidateDetailPage({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-950">Structured evaluation</h2>
-                  <p className="mt-1 text-sm text-slate-500">Versioned scoring, requirement results, and resume-grounded evidence.</p>
+                  <p className="mt-1 text-sm text-slate-500">Versioned scoring, requirement results, and resume-grounded evidence. AI never directly chooses the final score.</p>
                 </div>
                 {latestEvaluation ? (
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
@@ -372,7 +374,7 @@ export default async function CandidateDetailPage({
                     </div>
                     <div className="rounded-lg bg-emerald-50 p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Source</p>
-                      <p className="mt-2 text-sm font-semibold text-emerald-950">{formatEnum(latestEvaluation.source)}</p>
+                      <p className="mt-2 text-sm font-semibold text-emerald-950">{latestEvaluation.source === "HYBRID" ? "AI-assisted hybrid" : "Deterministic"}</p>
                     </div>
                     <div className="rounded-lg bg-amber-50 p-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Generated</p>
@@ -442,12 +444,16 @@ export default async function CandidateDetailPage({
                             <div key={result.id} className={`rounded-lg border p-4 ${tone}`}>
                               <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
                                 <span className="rounded-full bg-white/70 px-2.5 py-1">{formatEnum(result.status)}</span>
+                                {result.aiAssessment ? <span className="rounded-full bg-white/70 px-2.5 py-1">{formatEnum(result.aiAssessment)}</span> : null}
                                 <span className="rounded-full bg-white/70 px-2.5 py-1">{formatEnum(result.requirementType || result.requirement.type)}</span>
                                 <span className="rounded-full bg-white/70 px-2.5 py-1">{formatEnum(result.requirementCategory || result.requirement.category)}</span>
                                 {result.requirementIsCritical ? <span className="rounded-full bg-red-100 px-2.5 py-1 text-red-800">Critical</span> : null}
                               </div>
                               <p className="mt-3 text-sm font-semibold">{result.requirementText || result.requirement.text}</p>
                               <p className="mt-2 text-sm leading-6">Score contribution: {result.score} / {result.maxScore}. {result.explanation}</p>
+                              {result.deterministicStatus ? <p className="mt-2 text-xs leading-5">Deterministic evidence: {formatEnum(result.deterministicStatus)}{result.aiConfidence !== null ? ` | AI confidence: ${Math.round(result.aiConfidence * 100)}%` : ""}</p> : null}
+                              {result.aiExplanation ? <p className="mt-2 text-xs leading-5">AI assessment: {result.aiExplanation}</p> : null}
+                              {result.evidence.length ? <div className="mt-3 space-y-2">{result.evidence.slice(0, 2).map((evidence) => <blockquote key={evidence.id} className="border-l-2 border-current/30 pl-3 text-xs leading-5">{evidence.excerpt}{evidence.resumeSection ? <span className="mt-1 block font-semibold">{evidence.resumeSection}</span> : null}</blockquote>)}</div> : null}
                               {result.status === "MISSING" ? (
                                 <p className="mt-2 text-xs font-semibold">No supporting evidence found in the submitted resume.</p>
                               ) : null}

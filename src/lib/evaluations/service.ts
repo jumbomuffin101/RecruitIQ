@@ -5,11 +5,11 @@ import {
   EvaluationStatus,
   JobEvaluationRubric,
   Prisma,
-  RequirementMatchStatus,
 } from "@prisma/client";
 import { analyzeCandidateForJobWithFallback } from "@/lib/ai";
 import { DEFAULT_RUBRIC_WEIGHTS, PROMPT_VERSION, SCORING_VERSION } from "@/lib/evaluations/constants";
 import { collectEvidence } from "@/lib/evaluations/evidence";
+import { evaluateRequirementsSemantically } from "@/lib/evaluations/semantic";
 import {
   calculateEvaluationScoreBreakdown,
   parseJobRequirementDrafts,
@@ -203,7 +203,23 @@ export async function evaluateCandidateForJob({
   });
 
   try {
-    const breakdown = calculateEvaluationScoreBreakdown({ candidate, job, requirements, rubric: rubricWeights });
+    const deterministicBreakdown = calculateEvaluationScoreBreakdown({ candidate, job, requirements, rubric: rubricWeights });
+    const semantic = await evaluateRequirementsSemantically({
+      candidate,
+      job,
+      requirements,
+      deterministicScores: deterministicBreakdown.requirementScores,
+      evaluationId: pendingEvaluation.id,
+      operationId,
+      organizationId,
+    });
+    const breakdown = calculateEvaluationScoreBreakdown({
+      candidate,
+      job,
+      requirements,
+      rubric: rubricWeights,
+      semanticAssessments: semantic.assessments,
+    });
     const analysis = await analyzeCandidateForJobWithFallback(candidate, job, {
       requirements,
       rubric: rubricWeights,
@@ -219,11 +235,20 @@ export async function evaluateCandidateForJob({
         scoreTrace: breakdown.scoreTrace,
       });
     }
-    const evidence = collectEvidence({
+    const deterministicEvidence = collectEvidence({
       resumeText: candidate.resumeText,
       requirements,
       scores: breakdown.requirementScores,
     });
+    const aiEvidence = breakdown.requirementScores.flatMap((score) => score.aiEvidence.map((evidence) => ({
+      requirementId: score.requirementId,
+      resumeSection: evidence.resumeSection ?? null,
+      excerpt: evidence.excerpt,
+      startOffset: evidence.startOffset,
+      endOffset: evidence.endOffset,
+      confidence: score.aiConfidence ?? score.confidence,
+    })));
+    const evidence = [...deterministicEvidence, ...aiEvidence];
     const recommendation = getCandidateRecommendation({
       fitScore: breakdown.overallScore,
       currentStatus: candidate.applications.find((application) => application.jobId === job.id)?.status ?? ApplicationStatus.APPLIED,
@@ -233,8 +258,8 @@ export async function evaluateCandidateForJob({
         ? "SCREENED"
         : recommendation.recommendedStage;
     const nextStep = breakdown.hasMissingCritical ? "Recruiter review required" : recommendation.nextStep;
-    const source = analysis.source === "openrouter" ? EvaluationSource.HYBRID : EvaluationSource.DETERMINISTIC;
-    const modelName = analysis.source === "openrouter" ? getOpenRouterModelName() : null;
+    const source = semantic.usedAi ? EvaluationSource.HYBRID : EvaluationSource.DETERMINISTIC;
+    const modelName = semantic.usedAi ? semantic.model : analysis.source === "openrouter" ? getOpenRouterModelName() : null;
 
     await prisma.$transaction(async (tx) => {
       await tx.candidateEvaluation.update({
@@ -274,6 +299,10 @@ export async function evaluateCandidateForJob({
             evaluationId: pendingEvaluation.id,
             requirementId: requirement.id,
             status: score.status,
+            deterministicStatus: score.deterministicStatus,
+            aiAssessment: score.aiAssessment,
+            aiConfidence: score.aiConfidence,
+            aiExplanation: score.aiExplanation,
             score: score.score,
             maxScore: score.maxScore,
             confidence: score.confidence,
@@ -285,18 +314,18 @@ export async function evaluateCandidateForJob({
             requirementIsCritical: requirement.isCritical,
           },
         });
-        const matchedEvidence = evidence.find((item) => item.requirementId === score.requirementId);
+        const matchedEvidence = evidence.filter((item) => item.requirementId === score.requirementId);
 
-        if (matchedEvidence && score.status !== RequirementMatchStatus.MISSING) {
+        for (const item of matchedEvidence) {
           await tx.evaluationEvidence.create({
             data: {
               evaluationId: pendingEvaluation.id,
               requirementResultId: createdResult.id,
-              resumeSection: matchedEvidence.resumeSection,
-              excerpt: matchedEvidence.excerpt,
-              startOffset: matchedEvidence.startOffset,
-              endOffset: matchedEvidence.endOffset,
-              confidence: matchedEvidence.confidence,
+              resumeSection: item.resumeSection,
+              excerpt: item.excerpt,
+              startOffset: item.startOffset,
+              endOffset: item.endOffset,
+              confidence: item.confidence,
             },
           });
         }
@@ -316,7 +345,7 @@ export async function evaluateCandidateForJob({
           technicalQuestions: analysis.technicalQuestions,
           behavioralQuestions: analysis.behavioralQuestions,
           resumeSpecificQuestions: analysis.resumeSpecificQuestions,
-          source: analysis.source,
+          source: semantic.usedAi ? "openrouter" : analysis.source,
         },
       });
 
@@ -358,7 +387,7 @@ export async function evaluateCandidateForJob({
             jobId: job.id,
             evaluationId: pendingEvaluation.id,
             fitScore: breakdown.overallScore,
-            source: analysis.source,
+            source: source === EvaluationSource.HYBRID ? "hybrid" : "deterministic",
             rubricVersion: rubric.version,
             hasMissingCritical: breakdown.hasMissingCritical,
           } satisfies Prisma.InputJsonObject,

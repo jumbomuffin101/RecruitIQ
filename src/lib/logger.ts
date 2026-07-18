@@ -3,7 +3,9 @@ type LogFields = {
   organizationId?: string;
   resourceType?: string;
   resourceId?: string;
+  evaluationId?: string;
   operationId?: string;
+  promptVersion?: string;
   status?: number | string;
   reason?: string;
   clerkUserId?: string;

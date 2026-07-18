@@ -1,4 +1,5 @@
 import {
+  AiRequirementAssessment,
   InterviewCriterionType,
   InterviewScorecardStatus,
   InterviewSignal,
@@ -72,7 +73,14 @@ export async function createInterviewScorecard({
   }
 
   const previousCount = await prisma.interviewScorecard.count({ where: { candidateId, jobId } });
-  const requirements = evaluation.requirementResults;
+  const requirements = [...evaluation.requirementResults].sort((left, right) => {
+    const priority = (result: (typeof evaluation.requirementResults)[number]) =>
+      (result.requirementIsCritical ? 8 : 0)
+      + (result.status === RequirementMatchStatus.MISSING ? 5 : result.status === RequirementMatchStatus.PARTIAL ? 3 : 0)
+      + (result.aiAssessment === AiRequirementAssessment.WEAK_EVIDENCE ? 3 : 0)
+      + (result.aiConfidence !== null && result.aiConfidence < 0.5 ? 2 : 0);
+    return priority(right) - priority(left);
+  });
   if (!requirements.length) {
     throw new Error("The selected evaluation has no requirement results to validate.");
   }

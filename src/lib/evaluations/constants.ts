@@ -1,5 +1,14 @@
-export const SCORING_VERSION = "evaluation-v2";
-export const PROMPT_VERSION = "candidate-analysis-v2";
+export const SCORING_VERSION = "evaluation-v3-hybrid";
+export const PROMPT_VERSION = "candidate-analysis-v3-hybrid";
+
+export const REQUIREMENT_MATCH_CREDIT = {
+  NO_EVIDENCE: 0,
+  WEAK_EVIDENCE: 0.25,
+  PARTIAL_MATCH: 0.6,
+  STRONG_MATCH: 1,
+} as const;
+
+export const AI_STRONG_MATCH_MIN_CONFIDENCE = 0.5;
 
 export const RECOMMENDATION_THRESHOLDS = {
   interview: 85,
