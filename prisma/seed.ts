@@ -1,4 +1,4 @@
-import { PrismaClient, ActivityType, ApplicationStatus, CandidateStatus, EvaluationSource, EvaluationStatus, JobStatus, JobType, RequirementMatchStatus } from "@prisma/client";
+import { PrismaClient, ActivityType, ApplicationStatus, CandidateStatus, EvaluationSource, EvaluationStatus, InterviewCriterionType, InterviewScorecardStatus, InterviewSignal, JobStatus, JobType, RequirementMatchStatus } from "@prisma/client";
 import { analyzeCandidateForJob } from "../src/lib/ai";
 import { PROMPT_VERSION, SCORING_VERSION } from "../src/lib/evaluations/constants";
 import { collectEvidence } from "../src/lib/evaluations/evidence";
@@ -8,12 +8,12 @@ import { getCandidateRecommendation } from "../src/lib/recommendations";
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.organization.deleteMany({ where: { slug: "recruitiq-demo" } });
+  await prisma.organization.deleteMany({ where: { slug: { in: ["recruitiq-demo", "recruitiq-sample"] } } });
 
   const org = await prisma.organization.create({
     data: {
       name: "Northstar Labs",
-      slug: "recruitiq-demo",
+      slug: "recruitiq-sample",
       users: { create: { name: "Alex Morgan", email: "alex@northstarlabs.example", role: "ADMIN" } },
     },
   });
@@ -179,6 +179,8 @@ async function main() {
       status: CandidateStatus.APPLIED, job: jobs[3], notes: "Portfolio review needed before screening.", analyzed: false, scoreOverride: 62,
     },
   ];
+  const seededCandidates = new Map<string, { candidateId: string; jobId: string }>();
+  const seededEvaluations = new Map<string, string>();
 
   const currentTitles = ["Senior Product Engineer", "Full-Stack Engineer", "Backend Engineer", "Web Producer", "Senior Customer Success Manager", "Customer Success Manager", "Customer Support Lead", "Growth Operations Manager", "Lifecycle Marketing Specialist", "Marketing Coordinator", "Senior Product Designer", "Visual Designer"];
   const currentCompanies = ["Orbit Systems", "Atlas Cloud", "Keystone Financial", "Independent", "Beacon SaaS", "Relay Health", "Copper Support", "Northwind Growth", "Juniper Commerce", "Cedar Events", "Canvas Works", "Studio Meridian"];
@@ -216,6 +218,7 @@ async function main() {
         fitScore: input.analyzed ? input.scoreOverride : null,
       },
     });
+    seededCandidates.set(input.name, { candidateId: candidate.id, jobId: input.job.id });
     await prisma.applicationStatusHistory.create({
       data: { applicationId: application.id, toStatus: input.status as unknown as ApplicationStatus, note: "Seeded application stage." },
     });
@@ -255,6 +258,7 @@ async function main() {
           completedAt: new Date(),
         },
       });
+      seededEvaluations.set(input.name, evaluation.id);
       await prisma.evaluationCategoryScore.createMany({
         data: breakdown.categoryScores.map((category) => ({
           evaluationId: evaluation.id,
@@ -310,6 +314,71 @@ async function main() {
     }
   }
 
+  const maya = seededCandidates.get("Maya Chen");
+  const mayaEvaluationId = seededEvaluations.get("Maya Chen");
+  if (maya && mayaEvaluationId) {
+    const scorecard = await prisma.interviewScorecard.create({
+      data: {
+        candidateId: maya.candidateId,
+        jobId: maya.jobId,
+        evaluationId: mayaEvaluationId,
+        status: InterviewScorecardStatus.COMPLETED,
+        version: "v1",
+        completedAt: new Date(),
+        criteria: {
+          create: [
+            {
+              type: InterviewCriterionType.TECHNICAL,
+              title: "System design depth",
+              question: "Walk through the trade-offs you made when designing a customer-facing workflow backed by a PostgreSQL data model.",
+              evaluationGuidance: "Look for clear ownership, trade-off reasoning, and evidence of production-scale decision making.",
+              weight: 10,
+              sortOrder: 0,
+              requirementText: "TypeScript, PostgreSQL, Prisma, and API design",
+            },
+            {
+              type: InterviewCriterionType.BEHAVIORAL,
+              title: "Customer and product judgment",
+              question: "Describe how customer discovery changed a product decision you owned.",
+              evaluationGuidance: "Look for direct customer context, measurable learning, and cross-functional collaboration.",
+              weight: 8,
+              sortOrder: 1,
+              requirementText: "Product analytics and strong communication",
+            },
+          ],
+        },
+      },
+      include: { criteria: { orderBy: { sortOrder: "asc" } } },
+    });
+
+    await prisma.interviewResponse.createMany({
+      data: [
+        {
+          scorecardId: scorecard.id,
+          criterionId: scorecard.criteria[0].id,
+          rating: 5,
+          signal: InterviewSignal.STRONG_POSITIVE,
+          notes: "Explained data-model trade-offs, idempotent workflow actions, and production observability with clear technical ownership.",
+          evidence: "Connected prior PostgreSQL and Prisma work directly to a customer-facing onboarding workflow.",
+        },
+        {
+          scorecardId: scorecard.id,
+          criterionId: scorecard.criteria[1].id,
+          rating: 4,
+          signal: InterviewSignal.POSITIVE,
+          notes: "Used customer discovery findings to prioritize an onboarding improvement and described the outcome clearly.",
+          evidence: "Shared a concrete example of pairing customer interviews with activation analytics.",
+        },
+      ],
+    });
+  }
+
+  // Updating this rubric after Elena's completed evaluation creates a safe stale-evaluation example.
+  await prisma.jobEvaluationRubric.update({
+    where: { jobId: jobs[3].id },
+    data: { version: { increment: 1 } },
+  });
+
   const now = Date.now();
   await prisma.activityLog.createMany({
     data: [
@@ -318,13 +387,14 @@ async function main() {
       { organizationId: org.id, type: ActivityType.CANDIDATE_CREATED, message: "Marcus Lee applied for Product Designer.", createdAt: new Date(now - 20 * 60 * 60 * 1000) },
       { organizationId: org.id, type: ActivityType.STATUS_CHANGED, message: "Jordan Patel advanced to Interview for Growth Operations Specialist.", createdAt: new Date(now - 30 * 60 * 60 * 1000) },
       { organizationId: org.id, type: ActivityType.ANALYSIS_GENERATED, message: "Recruiter Copilot analysis completed for Priya Shah.", createdAt: new Date(now - 48 * 60 * 60 * 1000) },
+      { organizationId: org.id, type: ActivityType.NOTE_ADDED, message: "Interview feedback completed for Maya Chen's Product Engineer scorecard.", createdAt: new Date(now - 8 * 60 * 60 * 1000) },
       { organizationId: org.id, type: ActivityType.CANDIDATE_CREATED, message: "Camille Martin applied for Customer Success Manager.", createdAt: new Date(now - 60 * 60 * 60 * 1000) },
       { organizationId: org.id, type: ActivityType.JOB_CREATED, message: "Product Designer opened in San Francisco.", createdAt: new Date(now - 5 * 24 * 60 * 60 * 1000) },
       { organizationId: org.id, type: ActivityType.JOB_CREATED, message: "Northstar Labs hiring workspace initialized.", createdAt: new Date(now - 7 * 24 * 60 * 60 * 1000) },
     ],
   });
 
-  console.log("Seeded Northstar Labs sample workspace with 4 jobs and 12 candidates.");
+  console.log("Seeded Northstar Labs sample workspace with 4 jobs, 12 candidates, evaluations, a stale-rubric example, and completed interview feedback.");
 }
 
 main()

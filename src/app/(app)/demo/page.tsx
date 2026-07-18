@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function LegacyDemoPage() {
+export default function QuickStartRedirectPage() {
   redirect("/quick-start");
 }

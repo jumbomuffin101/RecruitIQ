@@ -56,10 +56,10 @@ function DashboardPreview() {
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2 xl:grid-cols-4">
               {[
-                ["Active jobs", "12", BriefcaseBusiness, "text-emerald-700 bg-emerald-50"],
-                ["Candidates", "248", Users, "text-violet-700 bg-violet-50"],
-                ["Evaluations", "96", ClipboardCheck, "text-sky-700 bg-sky-50"],
-                ["In interview", "23", GitCompareArrows, "text-amber-700 bg-amber-50"],
+                ["Active jobs", "4", BriefcaseBusiness, "text-emerald-700 bg-emerald-50"],
+                ["Candidates", "12", Users, "text-violet-700 bg-violet-50"],
+                ["Evaluations", "10", ClipboardCheck, "text-sky-700 bg-sky-50"],
+                ["In interview", "3", GitCompareArrows, "text-amber-700 bg-amber-50"],
               ].map(([label, value, Icon, color]) => {
                 const MetricIcon = Icon as typeof BriefcaseBusiness;
                 return <div key={label as string} className="border border-slate-200 p-3"><div className="flex items-center justify-between"><span className="text-[10px] font-medium text-slate-500">{label as string}</span><span className={`flex h-6 w-6 items-center justify-center rounded-md ${color as string}`}><MetricIcon className="h-3.5 w-3.5" /></span></div><p className="mt-3 text-xl font-semibold text-slate-950">{value as string}</p></div>;
@@ -73,7 +73,7 @@ function DashboardPreview() {
                 </div>
                 <div className="mt-3 border border-emerald-100 bg-emerald-50/60 p-2.5"><p className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" />Recommended next step: Interview</p><p className="mt-1 text-[10px] leading-4 text-slate-600">Validate system-design depth with a structured scorecard.</p></div>
               </section>
-              <section className="hidden border border-slate-200 p-3 lg:block"><p className="text-[10px] font-semibold text-slate-700">Recent activity</p><div className="mt-3 grid gap-3">{["Sarah evaluated Backend Engineer", "Jordan applied to Frontend Engineer", "Priya interview scheduled"].map((activity, index) => <div key={activity} className="flex gap-2"><span className={`mt-0.5 h-2 w-2 rounded-full ${index === 0 ? "bg-emerald-500" : index === 1 ? "bg-amber-400" : "bg-violet-400"}`} /><p className="text-[10px] leading-4 text-slate-600">{activity}</p></div>)}</div></section>
+              <section className="hidden border border-slate-200 p-3 lg:block"><p className="text-[10px] font-semibold text-slate-700">Recent activity</p><div className="mt-3 grid gap-3">{["Maya Chen advanced to Product Engineer offer", "Jordan Patel evaluated for Growth Operations", "Elena Rodriguez moved to Product Designer interview"].map((activity, index) => <div key={activity} className="flex gap-2"><span className={`mt-0.5 h-2 w-2 rounded-full ${index === 0 ? "bg-emerald-500" : index === 1 ? "bg-amber-400" : "bg-violet-400"}`} /><p className="text-[10px] leading-4 text-slate-600">{activity}</p></div>)}</div></section>
             </div>
           </div>
         </div>
