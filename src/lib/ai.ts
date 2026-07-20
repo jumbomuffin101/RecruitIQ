@@ -1,4 +1,5 @@
 import { PROMPT_VERSION } from "@/lib/evaluations/constants";
+import type { NarrativeStatus } from "@/lib/evaluations/outcome";
 import { validateCandidateAnalysisResponse } from "@/lib/evaluations/schemas";
 import { calculateEvaluationScoreBreakdown, parseJobRequirementDrafts } from "@/lib/evaluations/scoring";
 import type { EvaluationScoreBreakdown, RequirementForScoring, RubricWeights } from "@/lib/evaluations/types";
@@ -53,6 +54,8 @@ type OpenRouterAnalysisResult = {
 
 type AnalysisWithSource = CandidateAnalysisResult & {
   source: "openrouter" | "deterministic";
+  status: NarrativeStatus;
+  reason: string;
 };
 
 function unique(values: string[]) {
@@ -198,7 +201,7 @@ async function analyzeWithOpenRouter(
   candidate: CandidateLike,
   job: JobLike,
   deterministic: CandidateAnalysisResult,
-): Promise<CandidateAnalysisResult | null> {
+): Promise<{ analysis: CandidateAnalysisResult; status: "success"; reason: "validated" } | { analysis: null; status: Exclude<NarrativeStatus, "success">; reason: string }> {
   const schema = {
     type: "object",
     additionalProperties: false,
@@ -264,16 +267,16 @@ async function analyzeWithOpenRouter(
       status: result.status,
       reason: result.reason,
     });
-    return null;
+    return { analysis: null, status: result.reason === "invalid_json" ? "invalid_output" : "provider_error", reason: result.reason };
   }
 
   const validated = validateCandidateAnalysisResponse(result.data);
   if (!validated.success) {
     logger.warn("openrouter_analysis_schema_invalid", { resourceType: "candidate_analysis", reason: "invalid_ai_output" });
-    return null;
+    return { analysis: null, status: "invalid_output", reason: "schema_validation" };
   }
 
-  return normalizeAnalysis(validated.data, deterministic);
+  return { analysis: normalizeAnalysis(validated.data, deterministic), status: "success", reason: "validated" };
 }
 
 export async function analyzeCandidateForJobWithFallback(
@@ -282,11 +285,11 @@ export async function analyzeCandidateForJobWithFallback(
   input: AnalysisInput = {},
 ): Promise<AnalysisWithSource> {
   const deterministic = analyzeCandidateForJob(candidate, job, input);
-  const aiAnalysis = await analyzeWithOpenRouter(candidate, job, deterministic);
+  const aiResult = await analyzeWithOpenRouter(candidate, job, deterministic);
 
-  if (aiAnalysis) {
-    return { ...aiAnalysis, source: "openrouter" };
+  if (aiResult.analysis) {
+    return { ...aiResult.analysis, source: "openrouter", status: aiResult.status, reason: aiResult.reason };
   }
 
-  return { ...deterministic, source: "deterministic" };
+  return { ...deterministic, source: "deterministic", status: aiResult.status, reason: aiResult.reason };
 }

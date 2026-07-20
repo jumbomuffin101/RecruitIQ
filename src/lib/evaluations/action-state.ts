@@ -1,23 +1,24 @@
 import { EvaluationSource } from "@prisma/client";
+import { getEvaluationCompletionMessage, getEvaluationCompletionTone, type NarrativeSource } from "@/lib/evaluations/outcome";
 
 export type EvaluationActionState =
   | {
       status: "idle";
       message?: undefined;
       evaluationId?: undefined;
-      usedFallback?: undefined;
+      tone?: undefined;
     }
   | {
       status: "success";
       message: string;
       evaluationId: string;
-      usedFallback: boolean;
+      tone: "success" | "info";
     }
   | {
       status: "error";
       message: string;
       evaluationId?: undefined;
-      usedFallback?: undefined;
+      tone?: undefined;
     };
 
 export const initialEvaluationActionState: EvaluationActionState = { status: "idle" };
@@ -25,19 +26,17 @@ export const initialEvaluationActionState: EvaluationActionState = { status: "id
 export function createEvaluationSuccessState({
   evaluationId,
   source,
+  narrativeSource,
 }: {
   evaluationId: string;
   source: EvaluationSource;
+  narrativeSource: NarrativeSource;
 }): EvaluationActionState {
-  const usedFallback = source !== EvaluationSource.HYBRID;
-
   return {
     status: "success",
-    message: usedFallback
-      ? "Evaluation completed using deterministic scoring because AI commentary was unavailable."
-      : "Candidate evaluation completed.",
+    message: getEvaluationCompletionMessage({ scoringMode: source, narrativeSource }),
     evaluationId,
-    usedFallback,
+    tone: getEvaluationCompletionTone({ scoringMode: source, narrativeSource }),
   };
 }
 
@@ -53,13 +52,7 @@ export function getEvaluationActionTone(state: EvaluationActionState) {
     return "error";
   }
 
-  if (state.status === "success" && state.usedFallback) {
-    return "info";
-  }
-
-  if (state.status === "success") {
-    return "success";
-  }
+  if (state.status === "success") return state.tone;
 
   return "idle";
 }

@@ -86,7 +86,28 @@ export default async function CandidateDetailPage({
     const selectedJobId = application?.jobId;
     const latestEvaluation = candidate.evaluations.find((evaluation) => evaluation.jobId === selectedJobId && evaluation.status === "COMPLETED") ?? candidate.evaluations.find((evaluation) => evaluation.jobId === selectedJobId);
     const evaluationHistory = candidate.evaluations.filter((evaluation) => evaluation.jobId === selectedJobId).slice(0, 5);
-    const analysis = candidate.resumeAnalyses.find((item) => item.jobId === selectedJobId);
+    const linkedAnalysis = latestEvaluation?.resumeAnalysis ?? null;
+    const legacyAnalysis = !latestEvaluation ? candidate.resumeAnalyses.find((item) => item.jobId === selectedJobId) : null;
+    const analysis = linkedAnalysis ?? legacyAnalysis;
+    const copilot = latestEvaluation
+      ? {
+          fitScore: latestEvaluation.overallScore ?? linkedAnalysis?.fitScore ?? 0,
+          summary: latestEvaluation.summary ?? linkedAnalysis?.summary ?? "No executive summary was generated for this evaluation.",
+          roleMatch: linkedAnalysis?.roleMatch,
+          strengths: linkedAnalysis?.strengths ?? [],
+          gaps: linkedAnalysis?.gaps ?? [],
+          nextStep: linkedAnalysis?.nextStep,
+        }
+      : analysis
+        ? {
+            fitScore: analysis.fitScore,
+            summary: analysis.summary,
+            roleMatch: analysis.roleMatch,
+            strengths: analysis.strengths,
+            gaps: analysis.gaps,
+            nextStep: analysis.nextStep,
+          }
+        : null;
     const kit = candidate.interviewKits.find((item) => item.jobId === selectedJobId);
     const latestScorecard = candidate.interviewScorecards.find((item) => item.jobId === selectedJobId) ?? null;
     const jobText = `${application?.job.description ?? ""} ${application?.job.requirements ?? ""}`.toLowerCase();
@@ -103,9 +124,9 @@ export default async function CandidateDetailPage({
     const analysisSourceLabel = latestEvaluation?.source === "HYBRID"
       ? "AI-assisted hybrid evaluation"
       : "Deterministic evaluation";
-    const recommendation = analysis
+    const recommendation = copilot
       ? getCandidateRecommendation({
-          fitScore: analysis.fitScore,
+          fitScore: copilot.fitScore,
           currentStatus: application?.status ?? "APPLIED",
         })
       : null;
@@ -169,7 +190,7 @@ export default async function CandidateDetailPage({
                 description="Are you sure you want to delete this candidate? This action cannot be undone."
                 confirmLabel="Delete Candidate"
               /> : null}
-              {canManage ? <GenerateAnalysisForm candidateId={candidate.id} jobId={selectedJobId} hasAnalysis={Boolean(analysis)} /> : null}
+              {canManage ? <GenerateAnalysisForm candidateId={candidate.id} jobId={selectedJobId} hasAnalysis={Boolean(latestEvaluation)} /> : null}
             </div>
           </div>
         </div>
@@ -259,12 +280,12 @@ export default async function CandidateDetailPage({
                   <p className="mt-1 text-sm text-slate-500">AI evaluates semantic evidence for each requirement. The final score is calculated using the job&apos;s deterministic scoring rubric.</p>
                 </div>
               </div>
-              {analysis ? (
+              {copilot ? (
                 <div className="mt-6">
                   <div className="rounded-lg bg-slate-950 p-5 text-white">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex items-end gap-3">
-                        <span className="text-6xl font-semibold tracking-tight">{analysis.fitScore}</span>
+                        <span className="text-6xl font-semibold tracking-tight">{copilot.fitScore}</span>
                         <span className="pb-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">Fit score</span>
                       </div>
                       <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200">
@@ -272,19 +293,19 @@ export default async function CandidateDetailPage({
                       </span>
                     </div>
                     <div className="mt-5">
-                      <FitScoreBar score={analysis.fitScore} size="lg" inverted />
+                      <FitScoreBar score={copilot.fitScore} size="lg" inverted />
                     </div>
                     <div className="mt-5 border-t border-white/10 pt-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Executive summary</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">{analysis.summary}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{copilot.summary}</p>
                     </div>
                   </div>
                   <div className="mt-4 grid gap-4 md:grid-cols-[1fr_0.6fr]">
                     <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
                       <h3 className="flex items-center gap-2 font-semibold text-blue-950"><Target className="h-4 w-4" />Role match explanation</h3>
                       <p className="mt-3 text-sm leading-6 text-blue-900">
-                        {analysis.roleMatch
-                          ? analysis.roleMatch
+                        {copilot.roleMatch
+                          ? copilot.roleMatch
                           : matchedSkills.length
                           ? `${candidate.name} directly matches ${matchedSkills.join(", ")} for the ${application?.job.title ?? candidate.roleAppliedFor} role.`
                           : `The profile shows transferable experience, but direct overlap with the role requirements needs validation.`}
@@ -304,7 +325,7 @@ export default async function CandidateDetailPage({
                         </p>
                       ) : null}
                       <p className={`mt-2 text-sm leading-6 ${recommendationStyles.body}`}>
-                        {recommendation?.description || analysis.nextStep || "Use the interview kit below to validate strengths and close the highest-priority gaps."}
+                        {recommendation?.description || copilot.nextStep || "Use the interview kit below to validate strengths and close the highest-priority gaps."}
                       </p>
                     </div>
                   </div>
@@ -315,7 +336,7 @@ export default async function CandidateDetailPage({
                         Strengths
                       </h3>
                       <ul className="mt-3 space-y-2 text-sm leading-6 text-emerald-900">
-                        {analysis.strengths.map((item) => (
+                        {copilot.strengths.map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
@@ -326,7 +347,7 @@ export default async function CandidateDetailPage({
                         Risks and gaps
                       </h3>
                       <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
-                        {analysis.gaps.map((item) => (
+                        {copilot.gaps.map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>

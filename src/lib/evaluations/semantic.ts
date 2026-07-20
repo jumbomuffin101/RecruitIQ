@@ -1,11 +1,12 @@
 import { AiRequirementAssessment } from "@prisma/client";
 import { z } from "zod";
 import { PROMPT_VERSION } from "@/lib/evaluations/constants";
+import type { SemanticAssessmentStatus } from "@/lib/evaluations/outcome";
 import { logger } from "@/lib/logger";
 import { callOpenRouterJsonWithStatus, getOpenRouterModelName } from "@/lib/openrouter";
 import type { CandidateForEvaluation, GroundedAiEvidence, JobForEvaluation, RequirementForScoring, RequirementScore, SemanticRequirementAssessment } from "@/lib/evaluations/types";
 
-const MAX_EVIDENCE_PER_REQUIREMENT = 2;
+const MAX_EVIDENCE_PER_REQUIREMENT = 1;
 
 const semanticResponseSchema = z.object({
   assessments: z.array(z.object({
@@ -16,7 +17,7 @@ const semanticResponseSchema = z.object({
       excerpt: z.string().trim().min(6).max(500),
       resumeSection: z.string().trim().min(2).max(80).optional(),
     })).max(MAX_EVIDENCE_PER_REQUIREMENT),
-    explanation: z.string().trim().min(8).max(500),
+    explanation: z.string().trim().min(8).max(240),
   })).max(24),
 });
 
@@ -106,11 +107,11 @@ export async function evaluateRequirementsSemantically({
   const result = await callOpenRouterJsonWithStatus<SemanticResponse>({
     context: "semantic requirement evaluation",
     temperature: 0.1,
-    maxTokens: 1800,
-    timeoutMs: 55_000,
+    maxTokens: 2200,
+    timeoutMs: 60_000,
     retries: 1,
-    systemPrompt: "You are RecruitIQ's evidence evaluator. Return strict JSON only. Assess supplied resume evidence; do not invent facts, scores, hiring decisions, or requirements.",
-    prompt: "Assess every requirement independently. Use only the supplied candidate profile and resume text. Absence of evidence is not proof of absence. Cite exact resume excerpts for any assessment above NO_EVIDENCE. Do not produce a final score or hiring recommendation. Preserve every requirement ID exactly.",
+    systemPrompt: "You are RecruitIQ's evidence evaluator. Return a compact JSON object only. Assess supplied resume evidence; do not invent facts, scores, hiring decisions, or requirements.",
+    prompt: "Assess every requirement independently. Return exactly one item for every supplied requirement ID, preserve each ID exactly, and keep each explanation under 180 characters. Use at most one short, exact resume excerpt. Use NO_EVIDENCE with an empty evidence array when no direct evidence exists. Absence of evidence is not proof of absence. Do not produce a final score or hiring recommendation.",
     schema: {
       type: "object",
       additionalProperties: false,
@@ -151,17 +152,20 @@ export async function evaluateRequirementsSemantically({
 
   if (!result.ok) {
     logger.warn("hybrid_scoring_fallback", { evaluationId, operationId, organizationId, resourceType: "candidate", model: result.model, promptVersion: PROMPT_VERSION, reason: result.reason, status: result.status, errorCode: result.errorCode, errorMessage: result.errorMessage });
-    return { usedAi: false as const, assessments: [] as SemanticRequirementAssessment[], reason: result.reason };
+    return { usedAi: false as const, assessments: [] as SemanticRequirementAssessment[], status: result.reason === "invalid_json" ? "invalid_output" as SemanticAssessmentStatus : "provider_error" as SemanticAssessmentStatus, reason: result.reason, model: result.model };
   }
 
   const validated = validateSemanticRequirementResponse({ value: result.data, requirements, resumeText: candidate.resumeText });
   if (!validated.success) {
     logger.warn("invalid_ai_requirement_assessment", { evaluationId, operationId, organizationId, resourceType: "candidate", model: result.model, promptVersion: PROMPT_VERSION, reason: validated.reason });
-    return { usedAi: false as const, assessments: [] as SemanticRequirementAssessment[], reason: validated.reason };
+    return { usedAi: false as const, assessments: [] as SemanticRequirementAssessment[], status: "invalid_output" as const, reason: validated.reason, model: result.model };
   }
 
   const ungrounded = result.data.assessments.reduce((count, assessment, index) => count + assessment.evidence.length - validated.assessments[index].evidence.length, 0);
   if (ungrounded > 0) logger.warn("ungrounded_ai_evidence", { evaluationId, operationId, organizationId, resourceType: "candidate", model: result.model, promptVersion: PROMPT_VERSION, reason: `${ungrounded}_discarded` });
+  if (ungrounded > 0 && validated.assessments.every((assessment) => assessment.evidence.length === 0)) {
+    return { usedAi: false as const, assessments: [] as SemanticRequirementAssessment[], status: "ungrounded_evidence" as const, reason: "all_evidence_ungrounded", model: result.model };
+  }
   logger.info("hybrid_scoring_completed", { evaluationId, operationId, organizationId, resourceType: "candidate", model: result.model, promptVersion: PROMPT_VERSION, reason: "validated_semantic_assessments" });
-  return { usedAi: true as const, assessments: validated.assessments, model: result.model };
+  return { usedAi: true as const, assessments: validated.assessments, status: "success" as const, reason: "validated", model: result.model };
 }

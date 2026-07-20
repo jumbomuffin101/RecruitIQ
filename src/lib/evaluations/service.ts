@@ -10,6 +10,7 @@ import { analyzeCandidateForJobWithFallback } from "@/lib/ai";
 import { DEFAULT_RUBRIC_WEIGHTS, PROMPT_VERSION, SCORING_VERSION } from "@/lib/evaluations/constants";
 import { collectEvidence } from "@/lib/evaluations/evidence";
 import { evaluateRequirementsSemantically } from "@/lib/evaluations/semantic";
+import type { NarrativeSource, NarrativeStatus, SemanticAssessmentStatus } from "@/lib/evaluations/outcome";
 import {
   calculateEvaluationScoreBreakdown,
   parseJobRequirementDrafts,
@@ -30,7 +31,11 @@ type EvaluateCandidateForJobInput = {
 export type EvaluateCandidateForJobResult = {
   evaluationId: string;
   source: EvaluationSource;
-  usedFallback: boolean;
+  narrativeSource: NarrativeSource;
+  semanticAssessmentStatus: SemanticAssessmentStatus;
+  semanticAssessmentReason: string;
+  narrativeStatus: NarrativeStatus;
+  narrativeReason: string;
 };
 
 export class EvaluationOwnershipError extends Error {
@@ -274,6 +279,11 @@ export async function evaluateCandidateForJob({
           scoringVersion: SCORING_VERSION,
           promptVersion: PROMPT_VERSION,
           modelName,
+          narrativeSource: analysis.source,
+          semanticAssessmentStatus: semantic.status,
+          semanticAssessmentReason: semantic.reason,
+          narrativeStatus: analysis.status,
+          narrativeReason: analysis.reason,
           rubricSnapshot,
           completedAt: new Date(),
         },
@@ -335,6 +345,7 @@ export async function evaluateCandidateForJob({
         data: {
           candidateId: candidate.id,
           jobId: job.id,
+          evaluationId: pendingEvaluation.id,
           fitScore: breakdown.overallScore,
           summary: analysis.summary,
           roleMatch: analysis.roleMatch,
@@ -399,7 +410,11 @@ export async function evaluateCandidateForJob({
     return {
       evaluationId: pendingEvaluation.id,
       source,
-      usedFallback: source !== EvaluationSource.HYBRID,
+      narrativeSource: analysis.source,
+      semanticAssessmentStatus: semantic.status,
+      semanticAssessmentReason: semantic.reason,
+      narrativeStatus: analysis.status,
+      narrativeReason: analysis.reason,
     };
   } catch (error) {
     logger.error("candidate_evaluation_failed", { operationId, userId: actorUserId, organizationId, resourceType: "candidate", resourceId: candidateId, reason: error instanceof Error ? error.name : "unknown" });

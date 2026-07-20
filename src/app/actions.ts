@@ -536,6 +536,7 @@ export async function generateCandidateAnalysis(
   return createEvaluationSuccessState({
     evaluationId: result.evaluationId,
     source: result.source,
+    narrativeSource: result.narrativeSource,
   });
 }
 

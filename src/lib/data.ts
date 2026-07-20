@@ -69,6 +69,7 @@ export async function getCandidateDetail(id: string) {
             },
           },
           evidence: true,
+          resumeAnalysis: true,
         },
       },
     },
@@ -224,7 +225,7 @@ export async function getCompareData(jobId?: string) {
             where: { jobId: selectedJob.id, status: "COMPLETED" },
             orderBy: { createdAt: "desc" },
             take: 1,
-            include: { categories: true, requirementResults: { include: { requirement: true } } },
+            include: { categories: true, requirementResults: { include: { requirement: true } }, resumeAnalysis: true },
           },
           interviewScorecards: { where: { jobId: selectedJob.id }, orderBy: { createdAt: "desc" }, take: 1 },
         },
@@ -235,15 +236,15 @@ export async function getCompareData(jobId?: string) {
   const rankedCandidates = applications
     .map((application) => {
       const candidate = application.candidate;
-      const savedAnalysis = candidate.resumeAnalyses.find((analysis) => analysis.jobId === selectedJob.id);
       const structuredEvaluation = candidate.evaluations[0];
-      const analysis = savedAnalysis
+      const linkedAnalysis = structuredEvaluation?.resumeAnalysis;
+      const analysis = linkedAnalysis
         ? {
-            fitScore: savedAnalysis.fitScore,
-            summary: savedAnalysis.summary,
-            strengths: savedAnalysis.strengths,
-            gaps: savedAnalysis.gaps,
-            recommendedStage: savedAnalysis.recommendedStage,
+            fitScore: structuredEvaluation.overallScore ?? linkedAnalysis.fitScore,
+            summary: structuredEvaluation.summary ?? linkedAnalysis.summary,
+            strengths: linkedAnalysis.strengths,
+            gaps: linkedAnalysis.gaps,
+            recommendedStage: linkedAnalysis.recommendedStage,
             interviewQuestions: [],
           }
         : analyzeCandidateForJob(candidate, selectedJob, {

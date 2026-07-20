@@ -273,10 +273,12 @@ model ApplicationStatusHistory {
 }
 
 model ResumeAnalysis {
-  id                      String    @id @default(cuid())
+  id                      String               @id @default(cuid())
   candidateId             String
-  candidate               Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate               Candidate            @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   jobId                   String?
+  evaluationId            String?              @unique
+  evaluation              CandidateEvaluation? @relation("EvaluationNarrative", fields: [evaluationId], references: [id], onDelete: SetNull)
   fitScore                Int
   summary                 String
   roleMatch               String?
@@ -284,30 +286,35 @@ model ResumeAnalysis {
   gaps                    String[]
   recommendedStage        String
   nextStep                String?
-  technicalQuestions      String[]  @default([])
-  behavioralQuestions     String[]  @default([])
-  resumeSpecificQuestions String[]  @default([])
-  source                  String    @default("deterministic")
-  createdAt               DateTime  @default(now())
+  technicalQuestions      String[]             @default([])
+  behavioralQuestions     String[]             @default([])
+  resumeSpecificQuestions String[]             @default([])
+  source                  String               @default("deterministic")
+  createdAt               DateTime             @default(now())
 }
 
 model CandidateEvaluation {
-  id             String           @id @default(cuid())
-  candidateId    String
-  jobId          String
-  overallScore   Int?
-  confidence     Float?
-  recommendation String?
-  summary        String?
-  source         EvaluationSource
-  status         EvaluationStatus @default(PENDING)
-  scoringVersion String
-  promptVersion  String?
-  modelName      String?
-  errorMessage   String?
-  rubricSnapshot Json?
-  createdAt      DateTime         @default(now())
-  completedAt    DateTime?
+  id                       String           @id @default(cuid())
+  candidateId              String
+  jobId                    String
+  overallScore             Int?
+  confidence               Float?
+  recommendation           String?
+  summary                  String?
+  source                   EvaluationSource
+  status                   EvaluationStatus @default(PENDING)
+  scoringVersion           String
+  promptVersion            String?
+  modelName                String?
+  narrativeSource          String           @default("deterministic")
+  semanticAssessmentStatus String?
+  semanticAssessmentReason String?
+  narrativeStatus          String?
+  narrativeReason          String?
+  errorMessage             String?
+  rubricSnapshot           Json?
+  createdAt                DateTime         @default(now())
+  completedAt              DateTime?
 
   candidate           Candidate                 @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job                 Job                       @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -315,6 +322,7 @@ model CandidateEvaluation {
   requirementResults  RequirementResult[]
   evidence            EvaluationEvidence[]
   interviewScorecards InterviewScorecard[]
+  resumeAnalysis      ResumeAnalysis?           @relation("EvaluationNarrative")
 
   @@index([candidateId, jobId, createdAt])
   @@index([jobId, status, createdAt])
