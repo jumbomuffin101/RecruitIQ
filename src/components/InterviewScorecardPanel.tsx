@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { ClipboardCheck, FileCheck2, LoaderCircle, Save, ShieldQuestion } from "lucide-react";
+import { useActionState, useState } from "react";
+import { ChevronRight, ClipboardCheck, FileCheck2, LoaderCircle, Save, ShieldQuestion } from "lucide-react";
 import { generateInterviewScorecard, saveInterviewScorecard } from "@/app/actions";
 import {
   initialInterviewScorecardActionState,
@@ -61,6 +61,7 @@ function GenerateScorecard({ candidateId, jobId, disabled }: { candidateId: stri
 
 export function InterviewScorecardPanel({ candidateId, jobId, scorecard, hasEvaluation }: { candidateId: string; jobId?: string; scorecard: Scorecard | null; hasEvaluation: boolean }) {
   const [state, formAction, pending] = useActionState(saveInterviewScorecard, initialInterviewScorecardActionState);
+  const [expandedCriterionId, setExpandedCriterionId] = useState<string | null>(null);
 
   if (!scorecard) {
     return (
@@ -84,6 +85,7 @@ export function InterviewScorecardPanel({ candidateId, jobId, scorecard, hasEval
     signal: responses[index]?.signal ?? null,
   })));
   const isCompleted = scorecard.status === "COMPLETED";
+  const completedCriteria = responses.filter((response) => Boolean(response?.rating || response?.signal || response?.notes || response?.evidence)).length;
 
   return (
     <section className="surface rounded-lg p-5">
@@ -104,21 +106,30 @@ export function InterviewScorecardPanel({ candidateId, jobId, scorecard, hasEval
         <div className="rounded-lg bg-amber-50 p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Unresolved</p><p className="mt-1 text-2xl font-semibold text-amber-950">{summary.unresolved}</p></div>
       </div>
 
+      <div className="mt-5 rounded-lg border border-slate-200 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 text-sm"><span className="font-semibold text-slate-800">Scorecard progress</span><span className="font-semibold text-slate-950">{completedCriteria} of {scorecard.criteria.length} criteria completed</span></div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${scorecard.criteria.length ? (completedCriteria / scorecard.criteria.length) * 100 : 0}%` }} /></div>
+      </div>
+
       <form action={formAction} className="mt-5 space-y-4">
         <input type="hidden" name="scorecardId" value={scorecard.id} />
         {scorecard.criteria.map((criterion) => {
           const response = criterion.responses[0];
           const outcome = getInterviewValidationOutcome({ screeningStatus: criterion.requirementResult?.status ?? null, rating: response?.rating ?? null, signal: response?.signal ?? null });
           const outcomeStyle = outcome === "CONFIRMED" ? "bg-emerald-100 text-emerald-800" : outcome === "WEAKENED" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800";
+          const expanded = expandedCriterionId === criterion.id;
           return (
             <article key={criterion.id} className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+                <button type="button" onClick={() => setExpandedCriterionId(expanded ? null : criterion.id)} className="min-w-0 flex-1 text-left">
                   <p className="text-sm font-semibold text-slate-950">{criterion.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-700">{criterion.question}</p>
-                </div>
+                  <p className="mt-1 text-xs text-slate-500">{response?.rating ? `${response.rating}/5` : "Not scored"} · {response?.signal?.replaceAll("_", " ") || "No signal"}</p>
+                </button>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${outcomeStyle}`}>{outcome.toLowerCase()}</span>
+                <button type="button" onClick={() => setExpandedCriterionId(expanded ? null : criterion.id)} className="rounded-md p-1 text-slate-400 hover:bg-slate-100" aria-label={`${expanded ? "Collapse" : "Expand"} ${criterion.title}`}><ChevronRight className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`} /></button>
               </div>
+              <div className={expanded ? "mt-4" : "hidden"}>
+              <p className="text-sm leading-6 text-slate-700">{criterion.question}</p>
               {criterion.evaluationGuidance ? <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600"><ShieldQuestion className="mr-1 inline h-3.5 w-3.5" />{criterion.evaluationGuidance}</p> : null}
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <label className="text-xs font-semibold text-slate-700">Rating
@@ -141,6 +152,7 @@ export function InterviewScorecardPanel({ candidateId, jobId, scorecard, hasEval
                 </label>
               </div>
               {response?.submittedByUser?.name ? <p className="mt-3 text-xs font-medium text-slate-500">Submitted by {response.submittedByUser.name}</p> : null}
+              </div>
             </article>
           );
         })}
