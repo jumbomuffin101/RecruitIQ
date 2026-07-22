@@ -7,11 +7,20 @@ An explainable hiring intelligence platform that turns resumes, job requirements
 
 RecruitIQ is designed for startups, lean recruiting teams, and student organizations that need a more accountable alternative to spreadsheet-driven hiring. It keeps the final decision with people while making the reasoning, evidence, and workflow visible.
 
-## Product Preview
+## Screenshots
 
-The repository includes a realistic Northstar Labs sample workspace with four jobs, twelve fictional candidates, multi-job applications, evaluation history, a stale-rubric example, and completed interviewer feedback.
+The repository includes a realistic Northstar Labs sample workspace with four jobs, twelve fictional candidates, multi-job applications, evaluation history, a stale-rubric example, and completed interviewer feedback. Add real captures to [`docs/screenshots/`](docs/screenshots/README.md) using these stable paths:
 
-See the [screenshot capture plan](docs/screenshots/README.md) for the six recommended product screenshots. Captures are intentionally not fabricated or generated.
+| Screen | Path |
+| --- | --- |
+| Landing page | `docs/screenshots/landing.png` |
+| Dashboard | `docs/screenshots/dashboard.png` |
+| Candidate evaluation | `docs/screenshots/candidate-evaluation.png` |
+| Candidate comparison | `docs/screenshots/compare.png` |
+| Pipeline | `docs/screenshots/pipeline.png` |
+| Interview scorecard | `docs/screenshots/interview-scorecard.png` |
+
+Captures are intentionally not fabricated or generated.
 
 ## Core Workflow
 
@@ -28,7 +37,7 @@ For a concise 3-5 minute walkthrough, use the [demo script](docs/demo.md).
 - Structured job requirements with required/preferred type, critical flags, keyword matching, and per-job rubrics.
 - PDF/TXT resume intake with server-side parsing and editable structured candidate fields.
 - Deterministic, explainable candidate scoring with requirement-level results and extracted resume evidence.
-- Optional OpenRouter narrative enhancement for summaries, strengths, gaps, and interview questions.
+- OpenRouter-assisted semantic evidence evaluation and recruiter narrative, with deterministic scoring fallback.
 - Immutable evaluation history, rubric snapshots, and stale-evaluation visibility.
 - Application-specific pipeline stages and status history, including candidates who apply to multiple jobs.
 - Interview scorecards with requirement-linked questions, ratings, signals, observed evidence, and feedback validation.
@@ -125,7 +134,7 @@ Every completed evaluation persists the following:
 
 ## AI Reliability
 
-OpenRouter is optional. When configured, its output is requested server-side as strict JSON and validated with Zod before narrative fields are persisted. For hybrid scoring, it can only provide qualitative requirement evidence; exact requirement IDs, enum values, confidence bounds, and resume-grounded excerpts are validated before use. When a provider key is absent, the request times out, the response is invalid, an ID is unknown or duplicated, or evidence cannot be grounded, RecruitIQ continues with deterministic extraction and analysis. API keys and raw resume contents are never logged or sent to the browser.
+OpenRouter is optional. When configured, its output is requested server-side as strict JSON and validated with Zod before semantic-evidence and narrative fields are persisted. For hybrid scoring, it can only provide qualitative requirement evidence; exact requirement IDs, enum values, confidence bounds, and resume-grounded excerpts are validated before use. When a provider key is absent, the request times out, the response is invalid, an ID is unknown or duplicated, or evidence cannot be grounded, RecruitIQ continues with deterministic extraction and analysis. API keys and raw resume contents are never logged or sent to the browser.
 
 RecruitIQ resolves `OPENROUTER_BASE_URL` to one canonical Chat Completions endpoint. Use `https://openrouter.ai/api/v1` in Vercel; `https://openrouter.ai/api/v1/chat/completions` is also accepted explicitly. Workspace administrators can call `/api/ai-status?probe=1` to run a minimal server-side connectivity check. The response includes the configured model, endpoint, status, and sanitized provider error information only.
 

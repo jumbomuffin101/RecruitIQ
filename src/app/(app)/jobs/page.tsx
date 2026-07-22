@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { BriefcaseBusiness } from "lucide-react";
 import { createJob } from "@/app/actions";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
@@ -48,11 +47,7 @@ export default async function JobsPage({
                 icon={BriefcaseBusiness}
                 title="No jobs yet"
                 description="Create your first role to start ranking candidates against real requirements."
-                action={
-                  <Link href="/quick-start" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">
-                    Open Quick Start
-                  </Link>
-                }
+                action={null}
               />
             )}
           </div>

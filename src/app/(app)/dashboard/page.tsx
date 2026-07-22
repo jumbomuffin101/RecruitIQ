@@ -9,6 +9,15 @@ import { getDashboardData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
+function relativeTime(value: Date) {
+  const minutes = Math.max(0, Math.round((Date.now() - value.getTime()) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
 export default async function DashboardPage() {
   try {
     const data = await getDashboardData();
@@ -39,11 +48,12 @@ export default async function DashboardPage() {
             Northstar Labs sample workspace is active with {data.jobs.length} jobs, {data.totalCandidates} candidates, and {data.totalApplications} applications.
           </div>
         ) : null}
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Open jobs" value={data.openJobs} detail="Active roles accepting candidates" icon={BriefcaseBusiness} accent="emerald" />
           <StatCard label="Unique candidates" value={data.totalCandidates} detail="People in the talent workspace" icon={Users} accent="blue" />
-          <StatCard label="Applications in Interview" value={data.applicationsInInterview} detail="No calendar scheduling implied" icon={CalendarCheck} accent="violet" />
+          <StatCard label="Applications in interview" value={data.applicationsInInterview} detail="Current interview-stage applications" icon={CalendarCheck} accent="violet" />
           <StatCard label="Total applications" value={data.totalApplications} detail="Candidate and job relationships" icon={BarChart3} accent="amber" />
+          <StatCard label="Evaluations" value={data.evaluationCount} detail="Completed versioned evaluations" icon={Sparkles} accent="emerald" />
         </section>
 
         <section className="mt-8">
@@ -117,13 +127,13 @@ export default async function DashboardPage() {
         <section className="surface mt-8 rounded-lg p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950"><Activity className="h-5 w-5 text-blue-700" />Recent activity</h2>
-            <Link href="/quick-start" className="text-sm font-semibold text-blue-700 hover:text-blue-900">Quick Start</Link>
+            <Link href="/architecture" className="text-sm font-semibold text-blue-700 hover:text-blue-900">Architecture</Link>
           </div>
           <div className="divide-y divide-slate-100">
             {data.recentActivity.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
                 <p className="text-sm leading-6 text-slate-700">{item.message}</p>
-                <time className="shrink-0 text-xs text-slate-400">{item.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</time>
+                <time className="shrink-0 text-xs text-slate-400" dateTime={item.createdAt.toISOString()}>{relativeTime(item.createdAt)}</time>
               </div>
             ))}
           </div>

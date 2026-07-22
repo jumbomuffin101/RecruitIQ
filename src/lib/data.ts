@@ -78,7 +78,7 @@ export async function getCandidateDetail(id: string) {
 
 export async function getDashboardData() {
   const org = await getWorkspaceOrganization();
-  const [jobs, candidates, applications, recentActivity] = await Promise.all([
+  const [jobs, candidates, applications, recentActivity, evaluationCount, candidatesMissingAnalysis] = await Promise.all([
     getJobs(),
     getCandidates(),
     getPrisma().application.findMany({ where: { organizationId: org.id }, include: { candidate: { include: { resumeAnalyses: { orderBy: { createdAt: "desc" }, take: 1 } } } } }),
@@ -87,6 +87,8 @@ export async function getDashboardData() {
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
+    getPrisma().candidateEvaluation.count({ where: { candidate: { organizationId: org.id }, status: "COMPLETED" } }),
+    getPrisma().candidate.count({ where: { organizationId: org.id, evaluations: { none: { status: "COMPLETED" } } } }),
   ]);
 
   const openJobs = jobs.filter((job) => job.status === "OPEN").length;
@@ -106,7 +108,6 @@ export async function getDashboardData() {
     return score >= 80 && ["APPLIED", "SCREENED"].includes(application.status);
   }).length;
   const jobsWithLowPipeline = jobs.filter((job) => job.status === "OPEN" && job.applications.length < 3).length;
-  const candidatesMissingAnalysis = candidates.filter((candidate) => candidate.resumeAnalyses.length === 0).length;
 
   return {
     jobs,
@@ -114,6 +115,7 @@ export async function getDashboardData() {
     openJobs,
     totalCandidates: candidates.length,
     totalApplications: applications.length,
+    evaluationCount,
     applicationsInInterview,
     stageCounts: countApplicationsByStage(applications),
     averageFitScore,

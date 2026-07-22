@@ -38,7 +38,7 @@ const proofCards = [
   ["Production database", "Amazon Aurora PostgreSQL"],
   ["Deployment", "Vercel with Next.js server functions"],
   ["ORM", "Prisma with a PostgreSQL datasource"],
-  ["AI service", "Optional OpenRouter; deterministic fallback always available"],
+  ["AI service", "OpenRouter semantic evidence and narrative with deterministic fallback"],
   ["Access control", "Clerk sessions, organization-scoped queries, and server-side role checks"],
 ];
 
@@ -46,7 +46,7 @@ export default function ArchitecturePage() {
   return (
     <>
       <PageHeader
-        eyebrow="Submission proof"
+        eyebrow="Technical documentation"
         title="Architecture"
         description="RecruitIQ is a Vercel-hosted Next.js app with a PostgreSQL-first data layer designed to run on Amazon Aurora PostgreSQL."
       />
@@ -101,8 +101,8 @@ export default function ArchitecturePage() {
             </div>
           </div>
           <div className="mt-6 space-y-3 text-sm leading-6 text-slate-300">
-            <p className="rounded-lg bg-white/10 p-3">If `OPENROUTER_API_KEY` exists, Server Actions call OpenRouter server-side.</p>
-            <p className="rounded-lg bg-white/10 p-3">If the provider is absent or fails, deterministic scoring keeps every workflow available.</p>
+            <p className="rounded-lg bg-white/10 p-3">When available, OpenRouter evaluates requirement-level semantic evidence and generates recruiter-facing narrative server-side.</p>
+            <p className="rounded-lg bg-white/10 p-3">The deterministic rubric always calculates the final score. Provider failures fall back without blocking evaluation.</p>
             <p className="rounded-lg bg-white/10 p-3">No API keys are exposed to client components.</p>
           </div>
         </div>
@@ -112,7 +112,7 @@ export default function ArchitecturePage() {
         <div className="flex gap-3">
           <Workflow className="mt-1 h-5 w-5 shrink-0 text-emerald-700" />
           <p className="text-sm leading-6 text-emerald-950">
-            Submission explanation: Vercel serves the Next.js app, Server Actions execute trusted mutations,
+            Operational summary: Vercel serves the Next.js app, Server Actions execute trusted mutations,
             Prisma maps those actions to normalized PostgreSQL tables stored in Amazon Aurora PostgreSQL.
           </p>
         </div>
