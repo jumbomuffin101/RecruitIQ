@@ -202,8 +202,8 @@ export default async function ComparePage({
         </section> : (
           <EmptyState
             icon={Users}
-            title={data.selectedJob ? "No candidates available" : "Create a job to begin comparing"}
-            description={data.selectedJob ? "Add candidates to this workspace, then return here to rank them against the selected role." : "Candidate comparison needs at least one job with requirements."}
+            title={data.selectedJob ? "Add candidates to a job to compare them" : "Create a job to begin comparing"}
+            description={data.selectedJob ? "Add candidates to this job, then return here to rank them against the selected role." : "Candidate comparison needs at least one job with requirements."}
             action={<Link href={data.selectedJob ? "/candidates" : "/jobs"} className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">{data.selectedJob ? "Add candidates" : "Create a job"}</Link>}
           />
         )}

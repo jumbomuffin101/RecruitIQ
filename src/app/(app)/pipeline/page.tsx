@@ -1,6 +1,9 @@
+import Link from "next/link";
+import { Workflow } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { PipelineColumn } from "@/components/PipelineColumn";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
+import { EmptyState } from "@/components/EmptyState";
 import { getPipelineData } from "@/lib/data";
 import { getCurrentUserContext } from "@/lib/auth-context";
 
@@ -22,7 +25,7 @@ export default async function PipelinePage({
           title="Pipeline"
           description="Each card is a candidate's application for a specific job. Stage changes affect only that application."
         />
-        <form className="surface mb-6 flex flex-col gap-3 rounded-lg p-4 sm:flex-row sm:items-end">
+        {data.columns.some((column) => column.applications.length > 0) ? <><form className="surface mb-6 flex flex-col gap-3 rounded-lg p-4 sm:flex-row sm:items-end">
           <label className="flex-1 text-sm font-semibold text-slate-700">
             Job filter
             <select name="jobId" defaultValue={data.selectedJobId ?? ""} className="focus-ring mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -37,6 +40,12 @@ export default async function PipelinePage({
             <PipelineColumn key={column.status} status={column.status} applications={column.applications} canManage={context.role !== "INTERVIEWER"} />
           ))}
         </div>
+        </> : <EmptyState
+          icon={Workflow}
+          title="No applications yet"
+          description="Add a candidate to a job to begin moving applications through your hiring pipeline."
+          action={<Link href="/candidates" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">Add a candidate</Link>}
+        />}
       </>
     );
   } catch (error) {

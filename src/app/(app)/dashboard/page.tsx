@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Activity, AlertCircle, BarChart3, BriefcaseBusiness, CalendarCheck, Scale, Sparkles, UserCheck, Users, Workflow } from "lucide-react";
 import { CandidateCard } from "@/components/CandidateCard";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -43,11 +44,6 @@ export default async function DashboardPage() {
             </Link>
           }
         />
-        {data.candidates.length > 0 ? (
-          <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
-            Northstar Labs sample workspace is active with {data.jobs.length} jobs, {data.totalCandidates} candidates, and {data.totalApplications} applications.
-          </div>
-        ) : null}
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Open jobs" value={data.openJobs} detail="Active roles accepting candidates" icon={BriefcaseBusiness} accent="emerald" />
           <StatCard label="Unique candidates" value={data.totalCandidates} detail="People in the talent workspace" icon={Users} accent="blue" />
@@ -56,6 +52,16 @@ export default async function DashboardPage() {
           <StatCard label="Evaluations" value={data.evaluationCount} detail="Completed versioned evaluations" icon={Sparkles} accent="emerald" />
         </section>
 
+        {data.jobs.length === 0 && data.totalCandidates === 0 && data.totalApplications === 0 ? (
+          <section className="mt-8">
+            <EmptyState
+              icon={BriefcaseBusiness}
+              title="Start your hiring workspace"
+              description="Create your first job, then add candidates and applications to unlock pipeline insights and evaluations."
+              action={<Link href="/jobs" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">Create your first job</Link>}
+            />
+          </section>
+        ) : <>
         <section className="mt-8">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -84,11 +90,9 @@ export default async function DashboardPage() {
               <h2 className="text-lg font-semibold text-slate-950">Recent candidates</h2>
               <Users className="h-5 w-5 text-slate-400" />
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {data.recentCandidates.map((candidate) => (
-                <CandidateCard key={candidate.id} candidate={candidate} />
-              ))}
-            </div>
+            {data.recentCandidates.length ? <div className="grid gap-4 md:grid-cols-2">
+              {data.recentCandidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} />)}
+            </div> : <p className="py-8 text-center text-sm text-slate-500">No candidates yet. Add a candidate to begin building your talent pool.</p>}
           </div>
 
           <div className="surface rounded-lg p-5">
@@ -96,7 +100,7 @@ export default async function DashboardPage() {
               <h2 className="text-lg font-semibold text-slate-950">Pipeline overview</h2>
               <Workflow className="h-5 w-5 text-slate-400" />
             </div>
-            <div className="space-y-4">
+            {data.totalApplications ? <div className="space-y-4">
               {stageCounts.map((stage) => (
                 <div key={stage.stage}>
                   <div className="mb-2 flex items-center justify-between">
@@ -111,17 +115,17 @@ export default async function DashboardPage() {
                   </div>
                 </div>
               ))}
-            </div>
+            </div> : <p className="py-8 text-center text-sm text-slate-500">No applications yet. Add a candidate to a job to begin tracking the pipeline.</p>}
           </div>
         </section>
 
         <section className="mt-8">
           <h2 className="mb-4 text-lg font-semibold text-slate-950">Top candidates</h2>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {data.topCandidates.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {data.topCandidates.map((candidate) => (
               <CandidateCard key={candidate.id} candidate={candidate} />
             ))}
-          </div>
+          </div> : <div className="surface rounded-lg py-10 text-center text-sm text-slate-500">Top candidates will appear after you add and evaluate applicants.</div>}
         </section>
 
         <section className="surface mt-8 rounded-lg p-5">
@@ -129,15 +133,16 @@ export default async function DashboardPage() {
             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-950"><Activity className="h-5 w-5 text-blue-700" />Recent activity</h2>
             <Link href="/architecture" className="text-sm font-semibold text-blue-700 hover:text-blue-900">Architecture</Link>
           </div>
-          <div className="divide-y divide-slate-100">
+          {data.recentActivity.length ? <div className="divide-y divide-slate-100">
             {data.recentActivity.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
                 <p className="text-sm leading-6 text-slate-700">{item.message}</p>
                 <time className="shrink-0 text-xs text-slate-400" dateTime={item.createdAt.toISOString()}>{relativeTime(item.createdAt)}</time>
               </div>
             ))}
-          </div>
+          </div> : <p className="py-8 text-center text-sm text-slate-500">Activity will appear as your team creates jobs, reviews candidates, and updates applications.</p>}
         </section>
+        </>}
       </>
     );
   } catch (error) {

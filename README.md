@@ -9,7 +9,7 @@ RecruitIQ is designed for startups, lean recruiting teams, and student organizat
 
 ## Screenshots
 
-The repository includes a realistic Northstar Labs sample workspace with four jobs, twelve fictional candidates, multi-job applications, evaluation history, a stale-rubric example, and completed interviewer feedback. Add real captures to [`docs/screenshots/`](docs/screenshots/README.md) using these stable paths:
+New RecruitIQ workspaces start empty. After signing in and creating a workspace, create a job, add structured requirements, upload a candidate resume, and generate an evaluation. Add real captures to [`docs/screenshots/`](docs/screenshots/README.md) using these stable paths:
 
 | Screen | Path |
 | --- | --- |
@@ -155,7 +155,6 @@ Database-backed tests require a disposable `DATABASE_URL_TEST`. The reset guard 
 npm install
 cp .env.example .env
 npx prisma migrate deploy
-npm run db:seed
 npm run dev
 ```
 
@@ -186,6 +185,19 @@ npm run test:integration
 npm run test:e2e
 npm run build
 ```
+
+`npm run db:seed` is intentionally a safe no-op. Production and local workspaces are never populated with fictional recruiting records. Database-backed tests use a separate `DATABASE_URL_TEST` and test-only seed path.
+
+### Optional Legacy Demo Cleanup
+
+Older installations may still contain the legacy organizations with slugs `recruitiq-sample` or `recruitiq-demo`. The cleanup script targets only those exact slugs and never runs automatically:
+
+```bash
+CONFIRM_REMOVE_LEGACY_DEMO_DATA=true npx tsx scripts/remove-legacy-demo-data.ts --dry-run
+CONFIRM_REMOVE_LEGACY_DEMO_DATA=true npx tsx scripts/remove-legacy-demo-data.ts
+```
+
+Review the dry-run output before the second command. The script deletes organizations one at a time, relying on existing organization relation behavior; it does not use an unscoped bulk delete.
 
 ## Deployment
 

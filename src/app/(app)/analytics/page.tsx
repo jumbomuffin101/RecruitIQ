@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { BarChart3 } from "lucide-react";
 import { DatabaseNotice } from "@/components/DatabaseNotice";
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -38,12 +40,19 @@ export default async function AnalyticsPage() {
           title="Analytics"
           description="Application-aware pipeline health, conversion signals, job status, fit score quality, and skill demand."
         />
+        {data.totalApplications === 0 && data.totalCandidates === 0 && data.jobStatusCounts.every((item) => item.count === 0) ? <EmptyState
+          icon={BarChart3}
+          title="Analytics will appear as your hiring pipeline grows"
+          description="Create a job, add candidates, and evaluate applications to see hiring trends here."
+          action={<Link href="/jobs" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">Create your first job</Link>}
+        /> : <>
         <section className="mb-6 grid gap-4 md:grid-cols-4">
           <StatCard label="Unique candidates" value={data.totalCandidates} detail="People represented in the workspace" icon={BarChart3} />
           <StatCard label="Total applications" value={data.totalApplications} detail="Candidate and job relationships" icon={BarChart3} />
           <StatCard label="Average fit score" value={data.averageFitScore || "Pending"} detail="Across evaluated applications" icon={BarChart3} />
           <StatCard label="Rejection rate" value={`${data.conversions.rejectionRate}%`} detail="Across all applications" icon={BarChart3} />
         </section>
+        </>}
 
         <section className="grid gap-6 xl:grid-cols-3">
           <div className="surface rounded-lg p-5">

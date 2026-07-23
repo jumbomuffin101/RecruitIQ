@@ -45,7 +45,7 @@ export default async function JobsPage({
             ) : (
               <EmptyState
                 icon={BriefcaseBusiness}
-                title="No jobs yet"
+                title="Create your first job"
                 description="Create your first role to start ranking candidates against real requirements."
                 action={null}
               />

@@ -45,7 +45,7 @@ export default async function CandidatesPage({
             ) : (
               <EmptyState
                 icon={Users}
-                title="No candidates yet"
+                title="Add your first candidate"
                 description="Add a candidate with resume text to unlock scoring, interview prep, comparison, and pipeline tracking."
                 action={
                   <Link href="/jobs" className="rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white">

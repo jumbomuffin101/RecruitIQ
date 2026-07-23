@@ -24,8 +24,8 @@ export default function QuickStartPage() {
         <div className="flex gap-3">
           <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-blue-700" />
           <div>
-            <h2 className="font-semibold text-blue-950">The sample workspace is ready for exploration.</h2>
-            <p className="mt-1 text-sm leading-6 text-blue-900">Northstar Labs includes realistic roles, candidates, analyses, interview kits, and activity history.</p>
+            <h2 className="font-semibold text-blue-950">Build your hiring workspace.</h2>
+            <p className="mt-1 text-sm leading-6 text-blue-900">Start with a job, then add candidates, evaluations, and interview feedback as your process takes shape.</p>
           </div>
         </div>
       </section>
